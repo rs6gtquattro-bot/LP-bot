@@ -1129,45 +1129,6 @@ startKeepAlive() {
     await this.completeInitialization();
 }
 
-    async startQRCodeAuth() {
-    try {
-        console.log('📱 Запуск авторизации по QR-коду...');
-        
-        const qrCode = await this.telegramClient.signInUserWithQrCode(
-            { apiId: this.telegramApiId, apiHash: this.telegramApiHash },
-            {
-                onError: (err) => {
-                    console.error('❌ Ошибка QR-авторизации:', err);
-                },
-                qrCode: async (code) => {
-                    console.log('\n📱 Отсканируйте QR-код в Telegram:');
-                    console.log('Приложения → Устройства → Сканировать QR-код');
-                    
-                    // Генерируем QR-код в консоли
-                    const qr = require('qrcode-terminal');
-                    qr.generate(code.token.toString('base64'), { small: true });
-                }
-            }
-        );
-
-        console.log('✅ QR-авторизация успешна!');
-        
-        // Сохраняем сессию
-        this.sessionString = this.telegramClient.session.save();
-        this.saveSession(this.sessionString);
-        
-        this.botInfo = await this.telegramClient.getMe();
-        console.log(`🤖 Авторизованы как: @${this.botInfo.username || this.botInfo.firstName}`);
-        
-        await this.completeInitialization();
-        
-    } catch (error) {
-        console.error('❌ Ошибка QR-авторизации:', error.message);
-        console.log('🔄 Пробуем обычную авторизацию...');
-        await this.optimizedAuth();
-    }
-}
-
     async completeInitialization() {
     try {
         console.log('🎯 Завершаем инициализацию...');
