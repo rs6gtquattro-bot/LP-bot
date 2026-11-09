@@ -8,27 +8,20 @@
   },
   "dependencies": {
     "@vitalets/google-translate-api": "^9.2.1",
-    "@xenova/transformers": "^2.5.0",
-    "async-mutex": "^0.4.1",
     "axios": "^1.13.1",
-    "debug": "^4.4.3",
     "ejs": "^3.1.10",
     "express": "^4.21.2",
-    "extract-zip": "^2.0.1",
     "input": "^1.0.1",
     "jimp": "^0.16.2",
-    "jpeg-js": "^0.4.4",
     "jsqr": "^1.4.0",
-    "onnxruntime-node": "^1.16.0",
-    "p-queue": "^9.0.0",
-    "p-timeout": "^7.0.1",
     "pngjs": "^7.0.0",
     "qrcode": "^1.5.4",
     "sharp": "^0.32.0",
     "sqlite3": "^5.1.7",
     "telegram": "^2.26.22",
-    "tslib": "^2.8.1",
-    "websocket": "^1.0.35",
     "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "electron": "27.3.11"
   }
 }
