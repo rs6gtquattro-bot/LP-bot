@@ -33,10 +33,6 @@
                     <i class="fas fa-code"></i>
                     <span>Команды</span>
                 </div>
-                <div class="nav-item" data-tab="stats">
-                    <i class="fas fa-chart-bar"></i>
-                    <span>Статистика</span>
-                </div>
             </nav>
             
             <div class="status">
@@ -115,14 +111,6 @@
                     <div class="quick-actions">
                         <h2>Быстрые действия</h2>
                         <div class="actions-grid">
-                            <button class="action-btn" onclick="sendTestCommand()">
-                                <i class="fas fa-bolt"></i>
-                                Тестовая команда
-                            </button>
-                            <button class="action-btn" onclick="clearCache()">
-                                <i class="fas fa-trash"></i>
-                                Очистить кэш
-                            </button>
                             <button class="action-btn" onclick="showCommands()">
                                 <i class="fas fa-list"></i>
                                 Список команд
@@ -179,14 +167,6 @@
                                 <span class="slider"></span>
                             </label>
                         </div>
-                        
-                        <div class="setting-group">
-                            <label>Автоудаление упоминаний</label>
-                            <label class="switch">
-                                <input type="checkbox" id="autoDeleteMentionsToggle">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
                     </div>
                     
                     <div class="settings-actions">
@@ -208,21 +188,6 @@
                         <input type="text" id="commandSearch" placeholder="Поиск команд...">
                     </div>
                     <div id="commandsList" class="commands-list"></div>
-                </div>
-
-                <!-- Stats Tab -->
-                <div id="stats" class="tab-pane">
-                    <h2>Статистика работы</h2>
-                    <div class="charts-container">
-                        <div class="chart">
-                            <h3>Активность по часам</h3>
-                            <canvas id="activityChart"></canvas>
-                        </div>
-                        <div class="chart">
-                            <h3>Использование команд</h3>
-                            <canvas id="commandsChart"></canvas>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>

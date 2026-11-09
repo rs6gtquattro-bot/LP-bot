@@ -18,7 +18,6 @@ class BotGUI {
 
     init() {
         this.setupEventListeners();
-        this.loadCommands();
         this.updateStats();
         this.checkBotStatus();
         
@@ -111,8 +110,10 @@ class BotGUI {
             document.querySelector(`[data-tab="${tabName}"] span`).textContent;
 
         // Загружаем данные для вкладки при необходимости
-        if (tabName === 'stats') {
-            this.loadCharts();
+        if (tabName === 'commands') {
+            this.loadCommands();
+        } else if (tabName === 'settings') {
+            this.loadSettings();
         }
     }
 
@@ -253,20 +254,42 @@ class BotGUI {
             `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
 
-    loadCommands() {
-        // Загружаем список команд из вашего бота
-        this.commands = [
-            { name: 'уведы', description: 'Включить/выключить уведомления' },
-            { name: 'автостатус', description: 'Управление автостатусом' },
-            { name: 'qr', description: 'Генерация QR-кода' },
-            { name: 'перевод', description: 'Перевод текста на русский' },
-            { name: 'айди', description: 'Показать ID пользователя' },
-            { name: 'мегапуш', description: 'Массовая рассылка' },
-            { name: 'команды', description: 'Показать список команд' },
-            // Добавьте остальные команды из вашего бота
-        ];
+    // Запрос к веб-панели запущенного бота через main-процесс
+    async panel(url, method = 'GET', body) {
+        const result = await ipcRenderer.invoke('panel-request', { url, method, body });
+        return result.data;
+    }
 
+    notify(type, message) {
+        this.addLog({ type, message, timestamp: new Date().toLocaleTimeString() });
+    }
+
+    async loadCommands() {
+        const data = await this.panel('/api/commands');
+        this.prefix = data.prefix || '';
+        this.commands = Array.isArray(data.commands) ? data.commands : [];
+        if (!data.commands) this.notify('warning', 'Список команд доступен, когда бот запущен');
         this.renderCommands();
+    }
+
+    async loadSettings() {
+        const data = await this.panel('/api/settings');
+        if (data.prefix === undefined) {
+            this.notify('warning', 'Настройки доступны, когда бот запущен');
+            return;
+        }
+        document.getElementById('commandPrefix').value = data.prefix;
+        document.getElementById('notificationsToggle').checked = data.notifications;
+        document.getElementById('autoStatusToggle').checked = data.autoStatus;
+    }
+
+    async saveSettings() {
+        const result = await this.panel('/settings', 'POST', {
+            prefix: document.getElementById('commandPrefix').value,
+            notifications: document.getElementById('notificationsToggle').checked,
+            autoStatus: document.getElementById('autoStatusToggle').checked
+        });
+        this.notify(result.success ? 'info' : 'error', result.message);
     }
 
     renderCommands() {
@@ -277,7 +300,7 @@ class BotGUI {
             const item = document.createElement('div');
             item.className = 'command-item';
             item.innerHTML = `
-                <div class="command-name">!${command.name}</div>
+                <div class="command-name">${this.prefix || ''}${command.name}</div>
                 <div class="command-desc">${command.description}</div>
             `;
             container.appendChild(item);
@@ -297,16 +320,11 @@ class BotGUI {
             const item = document.createElement('div');
             item.className = 'command-item';
             item.innerHTML = `
-                <div class="command-name">!${command.name}</div>
+                <div class="command-name">${this.prefix || ''}${command.name}</div>
                 <div class="command-desc">${command.description}</div>
             `;
             container.appendChild(item);
         });
-    }
-
-    loadCharts() {
-        // Заглушка для графиков - можно реализовать с помощью Chart.js
-        console.log('Loading charts...');
     }
 
     clearLogs() {
@@ -329,34 +347,21 @@ class BotGUI {
 }
 
 // Глобальные функции для кнопок
-function sendTestCommand() {
-    // Реализация отправки тестовой команды
-    console.log('Sending test command...');
-}
-
-function clearCache() {
-    // Реализация очистки кэша
-    console.log('Clearing cache...');
-}
-
 function showCommands() {
-    const gui = new BotGUI();
-    gui.switchTab('commands');
+    window.botGUI.switchTab('commands');
 }
 
 function openSettings() {
-    const gui = new BotGUI();
-    gui.switchTab('settings');
+    window.botGUI.switchTab('settings');
 }
 
 function saveSettings() {
-    // Реализация сохранения настроек
-    console.log('Saving settings...');
+    window.botGUI.saveSettings();
 }
 
+// «Сбросить» возвращает поля к сохранённым в боте значениям
 function resetSettings() {
-    // Реализация сброса настроек
-    console.log('Resetting settings...');
+    window.botGUI.loadSettings();
 }
 
 function clearLogs() {

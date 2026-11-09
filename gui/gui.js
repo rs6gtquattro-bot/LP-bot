@@ -1,5 +1,9 @@
 const { app, BrowserWindow, Menu, Tray, ipcMain } = require('electron');
+const fs = require('fs');
 const path = require('path');
+
+// Адрес веб-панели бота (web_interface.js слушает 3001)
+const PANEL_URL = 'http://127.0.0.1:3001';
 const { spawn } = require('child_process');
 
 class TelegramBotGUI {
@@ -29,11 +33,8 @@ class TelegramBotGUI {
             });
         });
 
-        this.app.on('window-all-closed', (e) => {
-            e.preventDefault();
-            if (this.mainWindow) {
-                this.mainWindow.hide();
-            }
+        this.app.on('window-all-closed', () => {
+            if (!this.tray) this.app.quit();
         });
 
         this.app.on('before-quit', () => {
@@ -64,6 +65,12 @@ class TelegramBotGUI {
         });
 
         this.mainWindow.on('close', (e) => {
+            // Без иконки в трее спрятанное окно не вернуть, поэтому закрываем приложение
+            if (!this.tray) {
+                this.app.isQuitting = true;
+                this.app.quit();
+                return;
+            }
             if (!this.app.isQuitting) {
                 e.preventDefault();
                 this.mainWindow.hide();
@@ -74,6 +81,10 @@ class TelegramBotGUI {
     createTray() {
         try {
             const iconPath = path.join(__dirname, 'assets', 'icon.ico');
+            if (!fs.existsSync(iconPath)) {
+                console.warn('Иконка трея не найдена, трей отключён:', iconPath);
+                return;
+            }
             this.tray = new Tray(iconPath);
             
             const contextMenu = Menu.buildFromTemplate([
@@ -143,7 +154,22 @@ class TelegramBotGUI {
 
         ipcMain.handle('close-window', () => {
             if (this.mainWindow) {
-                this.mainWindow.hide();
+                if (this.tray) this.mainWindow.hide();
+                else this.mainWindow.close();
+            }
+        });
+
+        // Запросы к веб-панели бота идут из main-процесса, чтобы не упираться в CORS
+        ipcMain.handle('panel-request', async (event, { method = 'GET', url, body }) => {
+            try {
+                const response = await fetch(PANEL_URL + url, {
+                    method,
+                    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+                    body: body ? JSON.stringify(body) : undefined
+                });
+                return { ok: response.ok, data: await response.json() };
+            } catch (error) {
+                return { ok: false, data: { success: false, message: 'Веб-панель бота недоступна: ' + error.message } };
             }
         });
     }
