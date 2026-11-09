@@ -98,24 +98,11 @@
                             </label>
                         </div>
                         <div class="option-description">
-                            Экспортировать настройки бота и конфигурации
+                            Экспортировать префикс и флаги уведомлений и автостатуса (без ключей)
                         </div>
                         <div class="option-count">1 конфигурация</div>
                     </div>
 
-                    <div class="export-option">
-                        <div class="option-header">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="exportDeepSeek">
-                                <span class="checkmark"></span>
-                                <strong>🤖 DeepSeek</strong>
-                            </label>
-                        </div>
-                        <div class="option-description">
-                            Экспортировать настройки DeepSeek AI (без API ключа)
-                        </div>
-                        <div class="option-count">Настройки модели</div>
-                    </div>
                 </div>
 
                 <div class="export-actions">
@@ -124,9 +111,6 @@
                     </button>
                     <button onclick="exportAll()" class="btn secondary">
                         💾 Экспортировать всё
-                    </button>
-                    <button onclick="createBackup()" class="btn tertiary">
-                        🗂️ Создать полный бэкап
                     </button>
                 </div>
             </div>
@@ -149,14 +133,6 @@
                             Все данные экспортируются в стандартном JSON формате для совместимости
                         </div>
                     </div>
-                    
-                    <div class="security-item">
-                        <div class="security-icon">🔄</div>
-                        <div class="security-text">
-                            <strong>Легкое восстановление</strong><br>
-                            Импортированные данные автоматически проверяются на корректность
-                        </div>
-                    </div>
                 </div>
             </div>
         </main>
@@ -168,8 +144,7 @@
         const selectedOptions = {
             triggers: document.getElementById('exportTriggers').checked,
             templates: document.getElementById('exportTemplates').checked,
-            settings: document.getElementById('exportSettings').checked,
-            deepseek: document.getElementById('exportDeepSeek').checked
+            settings: document.getElementById('exportSettings').checked
         };
 
         // Проверяем, что выбрано хотя бы что-то
@@ -180,13 +155,6 @@
 
         dashboard.showNotification('Подготовка экспорта...', 'info');
 
-        // Если выбран только триггеры - скачиваем файл триггеров
-        if (selectedOptions.triggers && !selectedOptions.templates && !selectedOptions.settings && !selectedOptions.deepseek) {
-            window.open('/export/triggers', '_blank');
-            dashboard.showNotification('Экспорт триггеров начат', 'success');
-            return;
-        }
-
         // Для комбинированного экспорта создаем общий файл
         createCombinedExport(selectedOptions);
     }
@@ -196,7 +164,6 @@
         document.getElementById('exportTriggers').checked = true;
         document.getElementById('exportTemplates').checked = true;
         document.getElementById('exportSettings').checked = true;
-        document.getElementById('exportDeepSeek').checked = true;
         
         exportSelected();
     }
@@ -225,13 +192,10 @@
             }
 
             if (options.settings) {
-                // Здесь можно добавить настройки
+                // Только безопасные поля: /api/settings не отдаёт ключи и секреты
+                const settingsResponse = await fetch('/api/settings');
+                exportData.settings = await settingsResponse.json();
                 exportData.exportedItems.push('settings');
-            }
-
-            if (options.deepseek) {
-                // Здесь можно добавить настройки DeepSeek
-                exportData.exportedItems.push('deepseek');
             }
 
             // Создаем и скачиваем файл
@@ -242,21 +206,6 @@
             console.error('Ошибка экспорта:', error);
             dashboard.showNotification('Ошибка при экспорте данных', 'error');
         }
-    }
-
-    function createBackup() {
-        dashboard.showNotification('Создание полного бэкапа...', 'info');
-        
-        // Создаем полный бэкап со всеми данными
-        const backupData = {
-            version: '1.0',
-            type: 'full_backup',
-            backupDate: new Date().toISOString(),
-            description: 'Полный бэкап lpBot'
-        };
-
-        downloadJSON(backupData, `lpbot-backup-${new Date().toISOString().split('T')[0]}.backup`);
-        dashboard.showNotification('Полный бэкап создан', 'success');
     }
 
     function downloadJSON(data, filename) {

@@ -72,7 +72,7 @@
                                 <div class="trigger-word"><%= trigger.word %></div>
                                 <div class="trigger-responses"><%= trigger.responses.slice(0, 2).join(', ') %></div>
                                 <div class="trigger-actions">
-                                    <button onclick="deleteTrigger('<%= trigger.word %>')" class="btn danger">Удалить</button>
+                                    <button data-word="<%= trigger.word %>" onclick="deleteTrigger(this.dataset.word)" class="btn danger">Удалить</button>
                                 </div>
                             </div>
                         <% }); %>

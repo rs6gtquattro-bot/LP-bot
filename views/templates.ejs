@@ -89,7 +89,7 @@
                                         <%= template.last_used ? new Date(template.last_used).toLocaleString('ru-RU') : 'Никогда' %>
                                     </div>
                                     <div style="flex: 1;">
-                                        <button onclick="deleteTemplate('<%= template.name %>')" class="btn danger small">Удалить</button>
+                                        <button data-name="<%= template.name %>" onclick="deleteTemplate(this.dataset.name)" class="btn danger small">Удалить</button>
                                     </div>
                                 </div>
                             <% }); %>
