@@ -189,18 +189,29 @@
         }
     }
 
-    async function testDeepSeek() {
-        if (!<%= deepseek.apiKey ? 'true' : 'false' %>) {
-            dashboard.showNotification('Сначала установите API ключ', 'error');
-            return;
-        }
+    async function callDeepSeekTest(message) {
+        const response = await fetch('/api/deepseek/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message })
+        });
+        return response.json();
+    }
 
+    async function testDeepSeek() {
         dashboard.showNotification('Тестирование подключения...', 'info');
-        
-        // Здесь будет вызов API для тестирования подключения
-        setTimeout(() => {
-            dashboard.showNotification('Подключение успешно!', 'success');
-        }, 2000);
+        try {
+            const result = await callDeepSeekTest('ping');
+            dashboard.showNotification(result.message, result.success ? 'success' : 'error');
+        } catch (error) {
+            dashboard.showNotification('Ошибка тестирования подключения', 'error');
+        }
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     async function sendTestMessage(event) {
@@ -210,25 +221,17 @@
 
         const testResult = document.getElementById('testResult');
         const aiResponse = document.getElementById('aiResponse');
-        
+
         testResult.style.display = 'block';
         aiResponse.innerHTML = '<div class="loading">🤔 AI думает...</div>';
 
         try {
-            // Здесь будет вызов API DeepSeek
-            setTimeout(() => {
-                aiResponse.innerHTML = `
-                    <div class="ai-message">
-                        <p>Привет! Я DeepSeek AI. Вы написали: "${message}"</p>
-                        <p>Это тестовый ответ от веб-интерфейса. В реальной работе здесь будет ответ от настоящего AI.</p>
-                        <div class="message-info">
-                            <small>Модель: <%= deepseek.model %>, Токены: 45/<%= deepseek.maxTokens %></small>
-                        </div>
-                    </div>
-                `;
-            }, 2000);
+            const result = await callDeepSeekTest(message);
+            aiResponse.innerHTML = result.success
+                ? `<div class="ai-message"><p>${escapeHtml(result.answer)}</p><div class="message-info"><small>Модель: ${escapeHtml(result.model || '')}</small></div></div>`
+                : `<div class="error">❌ ${escapeHtml(result.message)}</div>`;
         } catch (error) {
-            aiResponse.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+            aiResponse.innerHTML = `<div class="error">❌ Ошибка: ${escapeHtml(error.message)}</div>`;
         }
     }
     </script>

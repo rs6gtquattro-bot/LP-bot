@@ -91,45 +91,6 @@
                 </div>
             </div>
 
-            <!-- Графики и визуализация -->
-            <div class="card">
-                <h3>📊 Активность</h3>
-                <div class="charts-grid">
-                    <div class="chart-container">
-                        <h4>Использование команд</h4>
-                        <div class="chart-placeholder">
-                            <div class="chart-bars">
-                                <div class="chart-bar" style="height: 80%; background: #667eea;" title="триггер: 80%"></div>
-                                <div class="chart-bar" style="height: 65%; background: #764ba2;" title="шаб: 65%"></div>
-                                <div class="chart-bar" style="height: 45%; background: #f093fb;" title="айди: 45%"></div>
-                                <div class="chart-bar" style="height: 30%; background: #f5576c;" title="тест: 30%"></div>
-                                <div class="chart-bar" style="height: 25%; background: #4ecdc4;" title="дип: 25%"></div>
-                            </div>
-                            <div class="chart-labels">
-                                <span>триггер</span>
-                                <span>шаб</span>
-                                <span>айди</span>
-                                <span>тест</span>
-                                <span>дип</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="chart-container">
-                        <h4>Распределение по типам</h4>
-                        <div class="pie-chart">
-                            <div class="pie-segment" style="--percentage: 40; --color: #667eea;" title="Триггеры: 40%"></div>
-                            <div class="pie-segment" style="--percentage: 25; --color: #764ba2;" title="Шаблоны: 25%"></div>
-                            <div class="pie-segment" style="--percentage: 20; --color: #f093fb;" title="Команды: 20%"></div>
-                            <div class="pie-segment" style="--percentage: 15; --color: #4ecdc4;" title="Прочее: 15%"></div>
-                            <div class="pie-center">
-                                <div class="pie-total">100%</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Детальная статистика -->
             <div class="card">
                 <h3>📈 Детальная статистика</h3>
@@ -174,10 +135,6 @@
                         <h4>⚡ Производительность</h4>
                         <div class="stat-details">
                             <div class="stat-detail">
-                                <span>Среднее время ответа:</span>
-                                <span id="avgResponseTime">-</span>
-                            </div>
-                            <div class="stat-detail">
                                 <span>Ошибок за сегодня:</span>
                                 <span id="todayErrors">0</span>
                             </div>
@@ -190,45 +147,6 @@
                 </div>
             </div>
 
-            <!-- История активности -->
-            <div class="card">
-                <h3>📅 Активность за последние 24 часа</h3>
-                <div class="activity-timeline">
-                    <div class="timeline-item">
-                        <div class="timeline-time">14:30</div>
-                        <div class="timeline-dot success"></div>
-                        <div class="timeline-content">
-                            <strong>Добавлен новый триггер</strong>
-                            <span>"привет" → "Привет, друг!"</span>
-                        </div>
-                    </div>
-                    <div class="timeline-item">
-                        <div class="timeline-time">13:15</div>
-                        <div class="timeline-dot info"></div>
-                        <div class="timeline-content">
-                            <strong>Использован шаблон</strong>
-                            <span>"приветствие" (3 раза)</span>
-                        </div>
-                    </div>
-                    <div class="timeline-item">
-                        <div class="timeline-time">12:00</div>
-                        <div class="timeline-dot warning"></div>
-                        <div class="timeline-content">
-                            <strong>Обновлены настройки</strong>
-                            <span>Изменен префикс на "<%= bot.settings.prefix %>"</span>
-                        </div>
-                    </div>
-                    <div class="timeline-item">
-                        <div class="timeline-time">10:45</div>
-                        <div class="timeline-dot primary"></div>
-                        <div class="timeline-content">
-                            <strong>Запущен DeepSeek</strong>
-                            <span>Обработано 5 запросов</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Действия -->
             <div class="card">
                 <h3>⚡ Быстрые действия</h3>
@@ -236,14 +154,8 @@
                     <button onclick="refreshStats()" class="btn primary">
                         🔄 Обновить статистику
                     </button>
-                    <button onclick="clearStats()" class="btn secondary">
-                        🗑️ Очистить статистику
-                    </button>
                     <button onclick="exportStats()" class="btn tertiary">
                         📊 Экспорт статистики
-                    </button>
-                    <button onclick="showAdvancedStats()" class="btn info">
-                        📈 Расширенная статистика
                     </button>
                 </div>
             </div>
@@ -267,12 +179,6 @@
         document.getElementById('uptimeStat').textContent = 
             `${days}d ${hours}h ${minutes}m ${seconds}s`;
 
-        // Память (симуляция)
-        const memoryElement = document.getElementById('memoryStat');
-        const currentMemory = parseInt(memoryElement.textContent);
-        const newMemory = currentMemory + Math.random() * 2 - 1;
-        memoryElement.textContent = `${Math.max(50, Math.round(newMemory))} MB`;
-
         // WebSocket статус
         document.getElementById('wsStatus').textContent = 
             dashboard.ws && dashboard.ws.readyState === WebSocket.OPEN ? 
@@ -282,21 +188,19 @@
     // Загрузка детальной статистики
     async function loadDetailedStats() {
         try {
-            // Здесь будет загрузка реальных данных с сервера
-            // Пока используем демо-данные
-            document.getElementById('activeTriggers').textContent = '<%= triggers %>';
-            document.getElementById('totalTriggerUses').textContent = '1,247';
-            document.getElementById('popularTrigger').textContent = 'привет (156 раз)';
-            
-            document.getElementById('textTemplatesCount').textContent = '8';
-            document.getElementById('mediaTemplatesCount').textContent = '4';
-            document.getElementById('totalTemplateUses').textContent = '89';
-            
-            document.getElementById('avgResponseTime').textContent = '0.8s';
-            document.getElementById('todayErrors').textContent = '2';
-            
-            document.getElementById('nodeVersion').textContent = process.versions?.node || 'Unknown';
+            const response = await fetch('/api/stats');
+            const st = await response.json();
+            const set = (id, value) => { document.getElementById(id).textContent = value; };
 
+            set('memoryStat', `${st.memoryMb} MB`);
+            set('activeTriggers', st.activeTriggers);
+            set('totalTriggerUses', st.triggerUses);
+            set('popularTrigger', st.popularTrigger ? `${st.popularTrigger.word} (${st.popularTrigger.used} раз)` : '-');
+            set('textTemplatesCount', st.textTemplates);
+            set('mediaTemplatesCount', st.mediaTemplates);
+            set('totalTemplateUses', st.templateUses);
+            set('todayErrors', st.todayErrors);
+            set('nodeVersion', st.nodeVersion);
         } catch (error) {
             console.error('Ошибка загрузки статистики:', error);
         }
@@ -306,13 +210,6 @@
         updateRealTimeStats();
         loadDetailedStats();
         dashboard.showNotification('Статистика обновлена', 'success');
-    }
-
-    function clearStats() {
-        if (confirm('Очистить всю статистику? Это действие нельзя отменить.')) {
-            dashboard.showNotification('Статистика очищена', 'success');
-            // Здесь будет вызов API для очистки статистики
-        }
     }
 
     function exportStats() {
@@ -336,10 +233,6 @@
         dashboard.showNotification('Статистика экспортирована', 'success');
     }
 
-    function showAdvancedStats() {
-        dashboard.showNotification('Расширенная статистика в разработке', 'info');
-    }
-
     // Инициализация при загрузке страницы
     document.addEventListener('DOMContentLoaded', () => {
         updateRealTimeStats();
@@ -352,12 +245,6 @@
         setInterval(loadDetailedStats, 30000);
     });
 
-    // Глобальный объект process для версии Node.js
-    const process = {
-        versions: {
-            node: '<%= process.version %>' || 'Unknown'
-        }
-    };
     </script>
 
     <style>

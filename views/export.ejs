@@ -132,64 +132,6 @@
             </div>
 
             <div class="card">
-                <h3>🔄 Импорт данных</h3>
-                <div class="import-section">
-                    <div class="alert info">
-                        💡 <strong>Восстановление данных:</strong> Вы можете импортировать ранее экспортированные данные для восстановления настроек бота.
-                    </div>
-
-                    <form onsubmit="importData(event)" class="import-form">
-                        <div class="form-group">
-                            <label for="importFile">Файл для импорта:</label>
-                            <input type="file" id="importFile" accept=".json,.backup" class="form-control" required>
-                            <small class="form-text">Поддерживаются JSON файлы и бэкапы</small>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="overwriteExisting" checked>
-                                <span class="checkmark"></span>
-                                Заменять существующие данные
-                            </label>
-                        </div>
-
-                        <button type="submit" class="btn primary">🔄 Импортировать данные</button>
-                    </form>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3>📊 История экспортов</h3>
-                <div class="export-history">
-                    <div class="history-item">
-                        <div class="history-icon">💾</div>
-                        <div class="history-info">
-                            <div class="history-name">Полный бэкап</div>
-                            <div class="history-date">Сегодня, 14:30</div>
-                        </div>
-                        <div class="history-size">45.2 KB</div>
-                        <button class="btn small">📥</button>
-                    </div>
-                    
-                    <div class="history-item">
-                        <div class="history-icon">🔔</div>
-                        <div class="history-info">
-                            <div class="history-name">Только триггеры</div>
-                            <div class="history-date">Вчера, 09:15</div>
-                        </div>
-                        <div class="history-size">28.7 KB</div>
-                        <button class="btn small">📥</button>
-                    </div>
-
-                    <div class="no-history" style="display: none;">
-                        <div style="text-align: center; padding: 2rem; color: #6b7280;">
-                            📭 История экспортов отсутствует
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card">
                 <h3>🛡️ Безопасность</h3>
                 <div class="security-info">
                     <div class="security-item">
@@ -327,51 +269,6 @@
         URL.revokeObjectURL(url);
     }
 
-    async function importData(event) {
-        event.preventDefault();
-        
-        const fileInput = document.getElementById('importFile');
-        const overwrite = document.getElementById('overwriteExisting').checked;
-        
-        if (!fileInput.files.length) {
-            dashboard.showNotification('Выберите файл для импорта', 'warning');
-            return;
-        }
-
-        const file = fileInput.files[0];
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-            try {
-                const data = JSON.parse(e.target.result);
-                
-                // Проверяем валидность данных
-                if (!data.version || !data.exportDate) {
-                    throw new Error('Неверный формат файла');
-                }
-
-                if (confirm(`Импортировать данные из ${file.name}?`)) {
-                    // Здесь будет логика импорта данных
-                    dashboard.showNotification('Данные успешно импортированы', 'success');
-                    fileInput.value = ''; // Очищаем input
-                }
-            } catch (error) {
-                console.error('Ошибка импорта:', error);
-                dashboard.showNotification('Ошибка при импорте файла', 'error');
-            }
-        };
-
-        reader.readAsText(file);
-    }
-
-    // Показываем размер данных при выборе файла
-    document.getElementById('importFile').addEventListener('change', function() {
-        if (this.files.length > 0) {
-            const file = this.files[0];
-            const size = (file.size / 1024).toFixed(2);
-            dashboard.showNotification(`Выбран файл: ${file.name} (${size} KB)`, 'info');
-        }
-    });
     </script>
 
     <style>
