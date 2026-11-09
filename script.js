@@ -2479,6 +2479,11 @@ async editMessageWithTemplate(chatId, messageId, template) {
         }
         
         const handler = this.commands[command];
+        // VK-команды из TG: вк_[команда] и вк_[peerId]_[команда] (ТЗ п. 5.6), выполняет vkClient
+        if (!handler && command.startsWith('вк_') && this.vkClient) {
+            await this.editMessage(chatIdValue, messageIdValue, await this.vkClient.runFromTg(command.slice(3), args));
+            return;
+        }
         if (handler) {
             // Передаем правильные параметры
             await handler(args, message, chatIdValue, senderIdValue, messageIdValue);

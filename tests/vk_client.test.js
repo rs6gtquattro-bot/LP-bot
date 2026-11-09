@@ -89,7 +89,7 @@ const methodOf = (url) => url.replace('https://api.vk.com/method/', '');
     // 5. префикс и неизвестная команда
     {
         const sent = [];
-        const ax = fakeAxios((m, url, body) => { if (methodOf(url) === 'messages.send') sent.push(Object.fromEntries(new URLSearchParams(body))); return { response: 1 }; });
+        const ax = fakeAxios((m, url, body) => { if (['messages.send', 'messages.edit'].includes(methodOf(url))) sent.push(Object.fromEntries(new URLSearchParams(body))); return { response: 1 }; });
         const c = new VkClient({}, { userToken: 'TEST', proxy: '', trustedIds: [777] }, { axios: ax, log: () => {} });
         c.http = c.createHttp(); c.ownerId = 42;
         const pinged = [];
@@ -104,7 +104,7 @@ const methodOf = (url) => url.replace('https://api.vk.com/method/', '');
 
         await c.handleMessage(msg('*абракадабра 1 2'));
         const expected = "❌ Команда '*абракадабра' не найдена\nДля TG команд: *тг_абракадабра";
-        check('5в. неизвестная команда: ответ из ТЗ п. 5.3 в тот же чат', sent.length === 1 && sent[0].message === expected && sent[0].peer_id === '2000000115', `ответ: ${JSON.stringify(sent[0] && sent[0].message)}`);
+        check('5в. неизвестная команда: ответ из ТЗ п. 5.3 в тот же чат (своё сообщение редактируется, как в TG)', sent.length === 1 && sent[0].message === expected && sent[0].peer_id === '2000000115', `ответ: ${JSON.stringify(sent[0] && sent[0].message)}`);
 
         sent.length = 0;
         await c.handleMessage(msg('*абракадабра', { out: false, fromId: 555 }));
