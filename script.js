@@ -8267,8 +8267,19 @@ splitMessage(text, maxLength) {
 }}
 
 // ========== ЗАПУСК БОТА ==========
-const telegramApiId = 0; // REDACTED: значение в оригинале profilesbot1/, выносится в config.json
-const telegramApiHash = 'REDACTED'; // REDACTED: см. выше
+// Ключи Telegram API берутся из config.json рядом со script.js (см. config.example.json)
+// или из переменных окружения TELEGRAM_API_ID / TELEGRAM_API_HASH (имеют приоритет).
+const appConfig = (() => {
+    const configPath = path.join(__dirname, 'config.json');
+    try {
+        return fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
+    } catch (error) {
+        console.error(`❌ Не удалось прочитать ${configPath}:`, error.message);
+        return {};
+    }
+})();
+const telegramApiId = process.env.TELEGRAM_API_ID || appConfig.telegramApiId;
+const telegramApiHash = process.env.TELEGRAM_API_HASH || appConfig.telegramApiHash || '';
 
 console.log('🔧 Запуск с параметрами:');
 console.log(`- API ID: ${telegramApiId}`);
