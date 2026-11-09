@@ -2479,6 +2479,18 @@ async editMessageWithTemplate(chatId, messageId, template) {
         }
         
         const handler = this.commands[command];
+        // VK-команды из TG: вк_[команда] и вк_[peerId]_[команда] (ТЗ п. 5.6), выполняет vkClient
+        if (!handler && command.startsWith('вк_') && this.vkClient) {
+            // Мост выполняет команду в VK с правами владельца, поэтому пускаем только сообщения самого аккаунта
+            const ownId = this.botInfo && ((this.botInfo.id && this.botInfo.id.value) ? Number(this.botInfo.id.value) : Number(this.botInfo.id));
+            const fromOwner = Boolean((message && message.out) || (ownId && senderIdValue === ownId));
+            if (!fromOwner) {
+                console.log(`⛔ ${command} от ${senderIdValue}: мост TG → VK только для владельца, отклонено`);
+                return;
+            }
+            await this.editMessage(chatIdValue, messageIdValue, await this.vkClient.runFromTg(command.slice(3), args, { fromOwner: true }));
+            return;
+        }
         if (handler) {
             // Передаем правильные параметры
             await handler(args, message, chatIdValue, senderIdValue, messageIdValue);
