@@ -251,9 +251,10 @@ function setup({ reply = null, responses = {}, trusted = {}, bot = {} } = {}) {
       check(null, 'VK → TG: *тг_X и *тг_[chatId]_X идут в handleCommand TG; нет команды или TG не авторизован — ошибка',
         a === '✅ Выполнено в TG: ‘о_чате → чат 1' && c1 === JSON.stringify([['send', 1, '⏳ ‘о_чате (из VK)'], ['handle', 'о_чате', '', 1, 321]])
         && b === '✅ Выполнено в TG: ‘о_чате → чат -100500' && c2.includes('"handle","о_чате","x",-100500,321') && c3 === "❌ TG команда '‘нетакой' не найдена" && t2.last() === '❌ TG не авторизован, команда не выполнена', JSON.stringify([a, c1, b, c2, c3])); }
-    { const t = setup(); const r1 = await t.c.runFromTg('пинг', []); const sentToSelf = t.calls.every((x) => x.method !== 'messages.edit');
-      const r2 = await t.c.runFromTg('555_айди', ['@durov']); const r3 = await t.c.runFromTg('лп_статус', []); const r4 = await t.c.runFromTg('нетакой', []);
-      t.c.running = false; const r5 = await t.c.runFromTg('пинг', []);
+    { const t = setup(); const own = { fromOwner: true };
+      const r1 = await t.c.runFromTg('пинг', [], own); const sentToSelf = t.calls.every((x) => x.method !== 'messages.edit');
+      const r2 = await t.c.runFromTg('555_айди', ['@durov'], own); const r3 = await t.c.runFromTg('лп_статус', [], own); const r4 = await t.c.runFromTg('нетакой', [], own);
+      t.c.running = false; const r5 = await t.c.runFromTg('пинг', [], own);
       check(null, 'TG → VK (runFromTg): вк_X и вк_[peer]_X, ответ текстом для TG, без правки в VK',
         r1.startsWith('✅ VK (peer 42): 🏓 ...\n🏓 Понг!') && sentToSelf && r2 === '✅ VK (peer 555): 👤 Павел Дуров • vk.com/durov\n🆔 555' && r3.startsWith('✅ VK (peer 42): 📡 VK LP') && r4 === "❌ VK команда '*нетакой' не найдена" && r5 === '❌ VK-клиент не запущен',
         JSON.stringify([r1, r2, r4, r5])); }
@@ -265,13 +266,85 @@ function setup({ reply = null, responses = {}, trusted = {}, bot = {} } = {}) {
       const lpbot = new Function('require', 'module', '__dirname', 'process', src.slice(0, cut) + '\nreturn lpbot;')(req, {}, path.join(__dirname, '..'), process);
       const b = Object.create(lpbot.prototype);
       const edits = [];
-      Object.assign(b, { commands: { 'пинг': async () => edits.push('tg-пинг') }, settings: { prefix: '‘' }, getUserData: async () => ({}), editMessage: async (c, m, t) => edits.push([c, m, t]),
-        vkClient: { runFromTg: async (rest, args) => `VK:${rest}:${args.join(',')}` } });
+      Object.assign(b, { botInfo: { id: 1 }, commands: { 'пинг': async () => edits.push('tg-пинг') }, settings: { prefix: '‘' }, getUserData: async () => ({}), editMessage: async (c, m, t) => edits.push([c, m, t]),
+        vkClient: { runFromTg: async (rest, args, o) => `VK:${rest}:${args.join(',')}:${o && o.fromOwner}` } });
       await b.handleCommand('вк_555_айди', ['@durov'], {}, 10, 1, 77);
       await b.handleCommand('пинг', [], {}, 10, 1, 78);
       await b.handleCommand('вкк', [], {}, 10, 1, 79);
       check(null, 'script.js handleCommand: ‘вк_… → vkClient.runFromTg и правка TG-сообщения; обычные и неизвестные команды как раньше',
-        JSON.stringify(edits) === JSON.stringify([[10, 77, 'VK:555_айди:@durov'], 'tg-пинг', [10, 79, '❌ Неизвестная команда: ‘вкк']]), JSON.stringify(edits)); }
+        JSON.stringify(edits) === JSON.stringify([[10, 77, 'VK:555_айди:@durov:true'], 'tg-пинг', [10, 79, '❌ Неизвестная команда: ‘вкк']]), JSON.stringify(edits)); }
+
+    // ---------- права (ревью Романа, требование Дениса) ----------
+    // script.js handleCommand на настоящем VkClient: мост TG → VK только от владельца
+    const loadLpbot = () => {
+        const src = fs.readFileSync(path.join(__dirname, '..', 'script.js'), 'utf8');
+        const cut = src.indexOf('// ========== ЗАПУСК БОТА ==========');
+        const stub = new Proxy(function () {}, { get: (t, k) => (k === Symbol.toPrimitive ? () => '' : stub), apply: () => stub, construct: () => stub });
+        const req = (n) => (['fs', 'path', 'crypto'].includes(n) ? require(n) : stub);
+        return new Function('require', 'module', '__dirname', 'process', src.slice(0, cut) + '\nreturn lpbot;')(req, {}, path.join(__dirname, '..'), process);
+    };
+    const lpbot = loadLpbot();
+    const tgBridge = (t) => {
+        const b = Object.create(lpbot.prototype); const edits = []; const bridged = [];
+        const real = t.c.runFromTg.bind(t.c);
+        t.c.runFromTg = async (...a) => { bridged.push(a[0]); return real(...a); };
+        Object.assign(b, { botInfo: { id: 1 }, commands: {}, settings: { prefix: '‘' }, getUserData: async () => ({}),
+            editMessage: async (c, m, x) => edits.push(x), vkClient: t.c });
+        return { b, edits, bridged };
+    };
+    { const t = setup(); const { b, edits, bridged } = tgBridge(t);
+      t.calls.length = 0;
+      await b.handleCommand('вк_вк_токен', ['vk1.a.STRANGER_TOKEN_xxxxxxxxxxxxxxxxxxxx'], { out: false }, 10, 999, 80);
+      await b.handleCommand('вк_спам', ['50', 'х'], { out: false }, 10, 999, 81);
+      const strangerOk = bridged.length === 0 && edits.length === 0 && t.calls.length === 0 && t.c.state.userToken !== 'vk1.a.STRANGER_TOKEN_xxxxxxxxxxxxxxxxxxxx';
+      await b.handleCommand('вк_ор_статус', [], { out: true }, 10, 1, 82);
+      const ownerOk = bridged.join() === 'ор_статус' && /^✅ VK \(peer 42\): 🤖 OpenRouter/.test(edits[0] || '');
+      const direct = await t.c.runFromTg('вк_токен', ['x']);
+      check(null, 'права TG → VK: *вк_вк_токен / *вк_спам от постороннего не доходят до runFromTg и VK; от владельца выполняются; runFromTg без флага владельца — отказ',
+        strangerOk && ownerOk && direct === '⛔ Команды VK из TG доступны только владельцу', JSON.stringify({ strangerOk, bridged, edits, direct })); }
+    // VK → TG: *тг_ только владельцу
+    { const tgCalls = [];
+      const bot = { botInfo: { id: 1 }, settings: { prefix: '‘' }, commands: { 'о_чате': () => {} },
+        telegramClient: { sendMessage: async (chat, o) => { tgCalls.push('send'); return { id: 321 }; } },
+        handleCommand: async () => tgCalls.push('handle') };
+      const t = setup({ bot, trusted: { 777: 1 } }); const res = [];
+      for (const lvl of [1, 2, 3]) { t.c.state.trusted[777] = lvl; await t.run('*тг_о_чате', { out: false, fromId: 777 }); res.push(t.last()); await t.run('*тг_-100500_о_чате', { out: false, fromId: 777 }); res.push(t.last()); }
+      const denied = tgCalls.length === 0 && res.every((x) => x === '⛔ Команды TG (*тг_…) доступны только владельцу');
+      await t.run('*тг_о_чате'); const own = t.last();
+      check(null, 'права VK → TG: доверенный 1–3 уровня получает отказ на *тг_X и *тг_[chatId]_X, в TG ничего не уходит; владелец проходит',
+        denied && own === '✅ Выполнено в TG: ‘о_чате → чат 1' && tgCalls.join() === 'send,handle', JSON.stringify({ res, tgCalls, own })); }
+    // ВЛАДЕЛЕЦ и AI: посторонний и доверенный 1–2 уровня — ни напрямую, ни через мосты
+    { const names = [...new VkClient({}, {}).commands.entries()].filter(([, c]) => ['ВЛАДЕЛЕЦ', 'AI / OPENROUTER'].includes(c.section)).map(([n]) => n);
+      const bad = [];
+      for (const n of names) {
+        const args = n === 'код' ? ' показать script.js' : n === 'ор' ? ' привет' : n === 'вк_токен' ? ' vk1.a.EVIL_xxxxxxxxxxxxxxxxxxxxxxxxxxxx' : n === 'ор_ключ' ? ' sk-or-EVIL' : '';
+        // посторонний напрямую: ни одного запроса и ответа
+        { const t = setup(); t.c.state.openrouter.key = 'sk-or-REAL'; const c = await t.run(`*${n}${args}`, { out: false, fromId: 999 });
+          if (c.length) bad.push(`посторонний ${n}: ${c.map((x) => x.method)}`); }
+        // доверенный 1 и 2 напрямую: только отказ, команда не выполнена
+        for (const lvl of [1, 2]) {
+          const t = setup({ trusted: { 777: lvl } }); t.c.state.openrouter.key = 'sk-or-REAL'; const before = JSON.stringify(t.c.state);
+          const c = await t.run(`*${n}${args}`, { out: false, fromId: 777 });
+          const ok = c.length === 1 && c[0].params.message === `⛔ Команда '*${n}' недоступна для твоего уровня доступа` && JSON.stringify(t.c.state) === before;
+          if (!ok) bad.push(`уровень ${lvl} ${n}: ${JSON.stringify(c.map((x) => x.params && x.params.message || x.method))}`);
+          // доверенный через мост VK → TG (*тг_вк_X): отказ
+          const c2 = await t.run(`*тг_вк_${n}${args}`, { out: false, fromId: 777 });
+          if (!(c2.length === 1 && c2[0].params.message === '⛔ Команды TG (*тг_…) доступны только владельцу')) bad.push(`уровень ${lvl} *тг_вк_${n}`);
+        }
+        // посторонний через мост TG → VK: runFromTg не вызывается, в VK ничего
+        { const t = setup(); const { b, edits, bridged } = tgBridge(t); t.calls.length = 0;
+          await b.handleCommand(`вк_${n}`, args.trim() ? args.trim().split(' ') : [], { out: false }, 10, 999, 90);
+          if (bridged.length || edits.length || t.calls.length) bad.push(`TG посторонний вк_${n}`); }
+      }
+      check(null, `права ВЛАДЕЛЕЦ и AI (${names.length} команд): посторонний и доверенный 1–2 уровня не выполняют ни одну ни напрямую, ни через *тг_ / ‘вк_`, bad.length === 0 && names.length === 13, bad.join(' | ')); }
+    // ор — уровень 3 (ДОПУЩЕНИЕ), debug_triggers — не длиннее лимита VK
+    { const t = setup({ trusted: { 777: 3 }, responses: { openrouter: { choices: [{ message: { content: 'ответ' } }] } } }); t.c.state.openrouter.key = 'sk-or-REAL';
+      await t.run('*ор привет', { out: false, fromId: 777 }); const sent = t.calls.some((x) => x.method === 'openrouter');
+      t.c.state.trusted[777] = 2; await t.run('*ор привет', { out: false, fromId: 777 }); const deny2 = t.last() === "⛔ Команда '*ор' недоступна для твоего уровня доступа" && !t.calls.some((x) => x.method === 'openrouter');
+      check('ор', 'ор: доверенному 3-го уровня доступен, 2-го — отказ без запроса в OpenRouter', sent && deny2, JSON.stringify({ sent, deny2 })); }
+    { const t = setup(); for (let i = 1; i <= 300; i++) t.c.state.triggers.push({ id: i, word: `слово${i}`, response: 'длинный ответ на триггер '.repeat(3) });
+      await t.run('*debug_triggers'); const a = t.last();
+      check('debug_triggers', 'debug_triggers: 300 триггеров — ответ обрезан до лимита VK (≤ 4096) с пометкой', a.length <= 4096 && a.includes('обрезано') && a.endsWith(`nextTriggerId: ${t.c.state.nextTriggerId}`), `длина ${a.length}`); }
 
     // ---------- покрытие ----------
     const untested = [...new VkClient({}, {}).commands.keys()].filter((k) => !tested.has(k));

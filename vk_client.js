@@ -294,6 +294,11 @@ class VkClient {
 
         // Межплатформенные команды *тг_[команда] и *тг_[chatId]_[команда] (ТЗ п. 5.6)
         if (name.startsWith('тг_') && name.length > 3) {
+            // Мост в TG выполняет команду от имени аккаунта, поэтому только владельцу
+            if (level !== 'owner') {
+                await ctx.reply(`⛔ Команды TG (${prefix}тг_…) доступны только владельцу`);
+                return true;
+            }
             await this.routeToTg(ctx, name.slice(3));
             return true;
         }
@@ -372,7 +377,9 @@ class VkClient {
 
     // TG → VK: вызывается из handleCommand TG для команд вида вк_[команда] и вк_[peerId]_[команда].
     // Возвращает текст для TG. Без peerId команда выполняется в своём VK-диалоге (peer = свой id).
-    async runFromTg(rest, args = []) {
+    // opts.fromOwner обязателен: handleCommand TG ставит его, только если команду написал сам владелец.
+    async runFromTg(rest, args = [], opts = {}) {
+        if (!opts.fromOwner) return '⛔ Команды VK из TG доступны только владельцу';
         if (!this.running) return '❌ VK-клиент не запущен';
         const m = rest.match(/^(\d+)_(.+)$/);
         const peerId = m ? Number(m[1]) : this.ownerId;
@@ -896,12 +903,18 @@ function registerDefaultCommands(client) {
         return ctx.reply(`📄 ${file} (${from}-${to} из ${lines.length})\n${lines.slice(from - 1, to).map((l, i) => `${from + i}: ${l}`).join('\n')}`);
     });
     reg('debug_triggers', 'ВЛАДЕЛЕЦ', 'debug_triggers', 'owner', async (ctx) => {
-        return ctx.reply(`🐞 Триггеры VK: ${JSON.stringify(client.state.triggers)}\nnextTriggerId: ${client.state.nextTriggerId}`);
+        // Лимит VK на сообщение 4096 символов: длинный список обрезаем
+        const tail = `\nnextTriggerId: ${client.state.nextTriggerId}`;
+        const raw = JSON.stringify(client.state.triggers);
+        const max = 4000 - tail.length;
+        const body = raw.length > max ? `${raw.slice(0, max - 40)}… (обрезано, всего ${raw.length} символов)` : raw;
+        return ctx.reply(`🐞 Триггеры VK: ${body}${tail}`);
     });
 
     // ---------------- AI / OPENROUTER ----------------
+    // ДОПУЩЕНИЕ: ор, ор_статус и ор_помощь — уровень 3 (запросы тратят ключ владельца), ор_ключ и ор_модель — только владелец
     const orKey = () => process.env.OPENROUTER_API_KEY || client.state.openrouter.key || '';
-    reg('ор', 'AI / OPENROUTER', 'ор [запрос]', 1, async (ctx) => {
+    reg('ор', 'AI / OPENROUTER', 'ор [запрос]', 3, async (ctx) => {
         if (!ctx.rest) return ctx.reply('❌ Укажи запрос');
         if (!orKey()) return ctx.reply(`❌ Ключ OpenRouter не задан: ${client.config.prefix}ор_ключ [api_key]`);
         const id = await ctx.reply('🤖 Думаю...');
@@ -922,7 +935,7 @@ function registerDefaultCommands(client) {
         await client.saveState();
         return client.send(ctx.msg.peerId, '✅ Ключ OpenRouter сохранён, команда с ним удалена');
     });
-    reg('ор_статус', 'AI / OPENROUTER', 'ор_статус', 1, async (ctx) => {
+    reg('ор_статус', 'AI / OPENROUTER', 'ор_статус', 3, async (ctx) => {
         return ctx.reply(`🤖 OpenRouter\nКлюч: ${orKey() ? 'задан' : 'не задан'}\nМодель: ${client.state.openrouter.model}\nЗапросов с запуска: ${client.aiRequests}`);
     });
     reg('ор_модель', 'AI / OPENROUTER', 'ор_модель [модель]', 'owner', async (ctx) => {
@@ -933,7 +946,7 @@ function registerDefaultCommands(client) {
         await client.saveState();
         return ctx.reply(`✅ Модель OpenRouter: ${m}`);
     });
-    reg('ор_помощь', 'AI / OPENROUTER', 'ор_помощь', 1, (ctx) => help(ctx, 'ai'));
+    reg('ор_помощь', 'AI / OPENROUTER', 'ор_помощь', 3, (ctx) => help(ctx, 'ai'));
 }
 
 module.exports = VkClient;
