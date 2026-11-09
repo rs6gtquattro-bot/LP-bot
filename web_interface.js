@@ -3,7 +3,7 @@ const path = require('path');
 const WebSocket = require('ws');
 
 class WebInterface {
-    constructor(bot, db, port = 3001) { // Изменил порт на 3001
+    constructor(bot, db, port = 3001) {
         this.bot = bot;
         this.db = db;
         this.port = port;
@@ -11,7 +11,7 @@ class WebInterface {
         this.wss = null;
         
         // Инициализация Express
-        this.app = express(); // Ключевое исправление: this.app
+        this.app = express();
         
         this.setupMiddleware();
         this.setupRoutes();
@@ -28,14 +28,11 @@ class WebInterface {
         
         // Статические файлы
         this.app.use(express.static(path.join(__dirname, 'public')));
-        this.app.use('/css', express.static(path.join(__dirname, 'views', 'css')));
-        this.app.use('/js', express.static(path.join(__dirname, 'views', 'js')));
-        this.app.use('/assets', express.static(path.join(__dirname, 'views', 'assets')));
     }
 
     setupRoutes() {
         // Главная страница
-        this.app.get('/', (req, res) => { // Исправлено: this.app
+        this.app.get('/', (req, res) => {
             try {
                 res.render('index', {
                     bot: this.bot,
@@ -49,7 +46,7 @@ class WebInterface {
         });
 
         // Страница шаблонов
-        this.app.get('/templates', async (req, res) => { // Исправлено: this.app
+        this.app.get('/templates', async (req, res) => {
             try {
                 const templates = await this.db.getAllTemplates();
                 const total = templates.length;
@@ -66,7 +63,7 @@ class WebInterface {
         });
 
         // API для получения шаблонов
-        this.app.get('/api/templates', async (req, res) => { // Исправлено: this.app
+        this.app.get('/api/templates', async (req, res) => {
             try {
                 const templates = await this.db.getAllTemplates();
                 res.json({ templates });
@@ -76,7 +73,6 @@ class WebInterface {
             }
         });
 
-        // Другие маршруты...
         this.app.get('/settings', (req, res) => {
             res.render('settings', { bot: this.bot });
         });
@@ -103,7 +99,7 @@ class WebInterface {
     async start() {
         try {
             await new Promise((resolve, reject) => {
-                this.server = this.app.listen(this.port, (err) => { // Исправлено: this.app
+                this.server = this.app.listen(this.port, (err) => {
                     if (err) return reject(err);
                     console.log(`🌐 Веб-интерфейс запущен на порту ${this.port}`);
                     resolve();
@@ -123,17 +119,6 @@ class WebInterface {
     startWebSocket() {
         this.wss = new WebSocket.Server({ server: this.server });
         
-        this.wss.on('connection', (ws) => {
-            console.log('🔌 Новое WebSocket соединение');
-            
-            ws.on('message', (message) => {
-                console.log('📨 WebSocket сообщение:', message);
-            });
-            
-            ws.on('close', () => {
-                console.log('🔌 WebSocket соединение закрыто');
-            });
-        });
     }
 
     stop() {
@@ -159,4 +144,4 @@ class WebInterface {
     }
 }
 
-module.exports = WebInterface;
+module.exports = WebInterface;
