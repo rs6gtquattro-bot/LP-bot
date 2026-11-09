@@ -8345,6 +8345,11 @@ console.log(`- API ID: ${telegramApiId}`);
 console.log(`- API Hash: ${telegramApiHash ? '***' + telegramApiHash.slice(-4) : 'НЕ УСТАНОВЛЕН'}`);
 
 const bot = new lpbot(telegramApiId, telegramApiHash);
+
+// VK-клиент стартует сразу и не ждёт авторизации TG (ТЗ п. 3.4). Без токена пишет одну строку в лог и не запускается.
+const VkClient = require('./vk_client.js');
+bot.vkClient = new VkClient(bot, appConfig.vk || {});
+bot.vkClient.start().catch((error) => console.error('❌ VK: ошибка запуска:', error.message));
 bot.start().catch(console.error);
 
 module.exports = lpbot;
