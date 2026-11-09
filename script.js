@@ -34,16 +34,12 @@ const input = require('input');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const { spawn, exec } = require('child_process');
-const crypto = require('crypto');
 const qrcode = require('qrcode');
 const jsQR = require('jsqr');
 const { PNG } = require('pngjs');
-const translate = require('@vitalets/google-translate-api');
 const WebInterface = require('./web_interface.js');
 const { Api } = require('telegram/tl');
 const Jimp = require('jimp');
-const { UpdateConnectionState } = require('telegram/events');
 
 // отключаем логи gramJS
 process.env.DEBUG = ''
@@ -111,47 +107,6 @@ class lpbot {
 
         console.log('✅ lpbot инициализирован');
     }
-
-    async validateLoadedTriggers() {
-    console.log('🔍 Проверяем загруженные триггеры...');
-    
-    for (const [word, trigger] of this.settings.triggers) {
-        console.log(`📋 Триггер "${word}":`, {
-            word: trigger.word,
-            responses: trigger.responses,
-            settings: trigger.settings
-        });
-    }
-}
-
-    // метод чека прав бота
-    async checkBotPermissions(chatId) {
-    try {
-        const chat = await this.telegramClient.getEntity(chatId);
-        
-        // лс. всегда разрешены
-        if (chat.className === 'User' || chat.className === 'Chat') {
-            return { canSend: true, isPrivate: true };
-        }
-        
-        // для групп чекаем права
-        try {
-            const botMember = await this.telegramClient.getPermissions(chatId, this.botInfo.id);
-            return {
-                canSend: botMember && botMember.sendMessages,
-                isPrivate: false,
-                isAdmin: botMember && botMember.isAdmin
-            };
-        } catch (permError) {
-            console.log(`⚠️ Не удалось проверить права в чате ${chatId}:`, permError.message);
-            return { canSend: false, isPrivate: false };
-        }
-        
-    } catch (error) {
-        console.error(`❌ Ошибка проверки прав для чата ${chatId}:`, error.message);
-        return { canSend: false, isPrivate: false };
-    }
-}
 
     async updateTriggersTable() {
     return new Promise((resolve, reject) => {
@@ -339,71 +294,6 @@ class lpbot {
             else resolve();
         });
     });
-}
-
-// метод для миграции стг. в нью ск.
-async migrateOldTriggers(oldTriggers) {
-    const migrationPromises = oldTriggers.map(oldTrigger => {
-        return new Promise((resolve, reject) => {
-            // определяем ск. стг.
-            let word, response;
-            
-            if (oldTrigger.word && oldTrigger.response) {
-                // нью структура (уже есть word и response)
-                word = oldTrigger.word;
-                response = oldTrigger.response;
-            } else if (oldTrigger.trigger_word && oldTrigger.trigger_response) {
-                // альт. сск.
-                word = oldTrigger.trigger_word;
-                response = oldTrigger.trigger_response;
-            } else {
-                // хзшная ск. - скипаем
-                console.log('⚠️ Пропускаем триггер с неизвестной структурой:', oldTrigger);
-                resolve();
-                return;
-            }
-
-            // адд нью объект триггера
-            const newTrigger = {
-                word: word,
-                responses: [response], // соо. превращаем в массив
-                settings: {
-                    count: 1,
-                    delay: 0,
-                    chance: 100,
-                    cooldown: 0,
-                    enabled: true,
-                    regex: false,
-                    caseSensitive: false,
-                    reply: false,
-                    silent: false,
-                    created: oldTrigger.created_at || new Date(),
-                    used: oldTrigger.used_count || 0,
-                    lastUsed: oldTrigger.last_used || null
-                }
-            };
-
-            // сейвим в нью таб.
-            this.db.run(
-                `INSERT INTO triggers (word, responses, settings, used_count, last_used, created_at) 
-                 VALUES (?, ?, ?, ?, ?, ?)`,
-                [
-                    newTrigger.word,
-                    JSON.stringify(newTrigger.responses),
-                    JSON.stringify(newTrigger.settings),
-                    newTrigger.settings.used,
-                    newTrigger.settings.lastUsed,
-                    newTrigger.settings.created
-                ],
-                (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
-        });
-    });
-
-    await Promise.all(migrationPromises);
 }
 
     async saveTriggersToDatabase() {
@@ -617,20 +507,6 @@ async saveTimersToDatabase() {
         this.settings.triggers.clear();
     }
 }
-
-    async convertJpegToPng(jpegBuffer) {
-        try {
-            // Используем Jimp для конвертации JPEG в PNG
-            const image = await Jimp.read(jpegBuffer);
-            const pngBuffer = await image.getBufferAsync(Jimp.MIME_PNG);
-            console.log('✅ JPEG успешно конвертирован в PNG');
-            return pngBuffer;
-        } catch (error) {
-            console.error('❌ Ошибка конвертации JPEG в PNG:', error.message);
-            // В случае ошибки возвращаем оригинальный буфер
-            return jpegBuffer;
-        }
-    }
 
     // Добавьте эту функцию в класс lpbot для определения типа изображения
     getImageType(buffer) {
@@ -1062,25 +938,6 @@ async saveTimersToDatabase() {
     }
 }
 
-    setupConnectionHandlers() {
-    console.log('🔧 Настройка обработчиков соединения...');
-    
-    // Простой мониторинг соединения через ping
-    this.connectionMonitor = setInterval(async () => {
-        try {
-            if (this.telegramClient && this.telegramClient.connected) {
-                // Отправляем легкий запрос для проверки соединения
-                await this.telegramClient.invoke(new Api.ping({ 
-                    pingId: BigInt(Math.floor(Math.random() * 1000000000)) 
-                }));
-                // console.log('✅ Соединение стабильное'); // Можно раскомментировать для дебага
-            }
-        } catch (error) {
-            console.log('⚠️ Проблемы с соединением:', error.message);
-        }
-    }, 45000); // Проверяем каждые 45 секунд
-}
-
 startKeepAlive() {
     console.log('🔧 Запуск улучшенного keep-alive...');
     
@@ -1169,9 +1026,6 @@ startKeepAlive() {
             console.error('⚠️ Ошибка запуска веб-интерфейса, продолжаем:', webError.message);
         }
         
-        // ЗАКОММЕНТИРУЙТЕ проблемную строку и используйте альтернативу:
-        // this.setupConnectionHandlers(); // ЗАКОММЕНТИРОВАТЬ
-        
         // Вместо этого используйте простой keep-alive
         this.startKeepAlive();
         
@@ -1219,28 +1073,6 @@ async startWebInterface() {
         console.log('✅ Веб-интерфейс запущен');
     } catch (error) {
         console.error('❌ Ошибка запуска веб-интерфейса:', error);
-    }
-}
-
-    async checkExistingSession() {
-    try {
-        const sessionFile = path.join(__dirname, 'session.txt');
-        if (!fs.existsSync(sessionFile)) {
-            console.log('❌ Файл session.txt не существует');
-            return false;
-        }
-        
-        const sessionContent = fs.readFileSync(sessionFile, 'utf8').trim();
-        if (!sessionContent) {
-            console.log('❌ Файл session.txt пустой');
-            return false;
-        }
-        
-        console.log(`📊 Содержимое session.txt: ${sessionContent.substring(0, 50)}...`);
-        return true;
-    } catch (error) {
-        console.error('❌ Ошибка проверки сессии:', error);
-        return false;
     }
 }
 
@@ -1938,100 +1770,6 @@ async startWebInterface() {
     }
 }
 
-// Новый метод для редактирования сообщения с шаблоном
-async editMessageWithTemplate(chatId, messageId, template) {
-    try {
-        // Для текстовых шаблонов просто редактируем текст
-        if (template.content_type === 'text') {
-            await this.editMessage(chatId, messageId, template.text_content);
-            return;
-        }
-
-        // Для медиа-шаблонов нужно отправить медиа и отредактировать сообщение
-        if (template.media_data) {
-            // Создаем временный файл для медиа
-            const tempDir = path.join(__dirname, 'temp_templates');
-            if (!fs.existsSync(tempDir)) {
-                fs.mkdirSync(tempDir, { recursive: true });
-            }
-
-            const tempFile = path.join(tempDir, template.file_name || `template_${Date.now()}`);
-            fs.writeFileSync(tempFile, template.media_data);
-
-            // Для разных типов медиа используем разные методы отправки
-            let mediaMessage;
-            switch (template.content_type) {
-                case 'photo':
-                    mediaMessage = await this.telegramClient.sendFile(chatId, {
-                        file: tempFile,
-                        caption: template.text_content || null
-                    });
-                    break;
-                    
-                case 'video':
-                    mediaMessage = await this.telegramClient.sendFile(chatId, {
-                        file: tempFile,
-                        caption: template.text_content || null,
-                        video: true
-                    });
-                    break;
-                    
-                case 'voice':
-                    mediaMessage = await this.telegramClient.sendFile(chatId, {
-                        file: tempFile,
-                        caption: template.text_content || null,
-                        voice: true
-                    });
-                    break;
-                    
-                case 'video_note':
-                    mediaMessage = await this.telegramClient.sendFile(chatId, {
-                        file: tempFile,
-                        videoNote: true
-                    });
-                    break;
-                    
-                case 'sticker':
-                    mediaMessage = await this.telegramClient.sendFile(chatId, {
-                        file: tempFile,
-                        sticker: true
-                    });
-                    break;
-                    
-                default:
-                    mediaMessage = await this.telegramClient.sendFile(chatId, {
-                        file: tempFile,
-                        caption: template.text_content || null
-                    });
-            }
-
-            // Удаляем временный файл
-            setTimeout(() => {
-                try {
-                    fs.unlinkSync(tempFile);
-                } catch (e) {
-                    console.log('Не удалось удалить временный файл:', e.message);
-                }
-            }, 5000);
-
-            // После отправки медиа, удаляем сообщение с командой
-            try {
-                await this.telegramClient.deleteMessages(chatId, [messageId]);
-            } catch (deleteError) {
-                console.log('Не удалось удалить сообщение с командой:', deleteError.message);
-            }
-
-        } else {
-            // Если нет медиа, просто редактируем текст
-            await this.editMessage(chatId, messageId, template.text_content || '❌ Шаблон пуст');
-        }
-
-    } catch (error) {
-        console.error('❌ Ошибка отправки шаблона:', error);
-        await this.editMessage(chatId, messageId, `❌ Ошибка отправки шаблона: ${error.message}`);
-    }
-}
-
     // Получение шаблона из базы данных
     async getTemplateFromDatabase(templateName) {
     return new Promise((resolve, reject) => {
@@ -2379,40 +2117,6 @@ async editMessageWithTemplate(chatId, messageId, template) {
             console.error('❌ Ошибка отправки сообщения:', sendError.message);
         }
     }
-}
-
-    validateMessageParams(chatId, messageId) {
-    // чекаем, что chatId и messageId являются числами или BigInt
-    const isChatIdValid = (typeof chatId === 'number' || typeof chatId === 'bigint' || (chatId && typeof chatId.value === 'bigint'));
-    const isMessageIdValid = (typeof messageId === 'number' || typeof messageId === 'bigint');
-    
-    if (!isChatIdValid || !isMessageIdValid) {
-        console.error('❌ Неверные типы параметров сообщения:', { 
-            chatIdType: typeof chatId, 
-            messageIdType: typeof messageId,
-            chatId,
-            messageId
-        });
-        return false;
-    }
-    
-    // Извлекаем значение из BigInt объекта если нужно
-    const chatIdValue = (chatId && chatId.value) ? chatId.value : chatId;
-    const messageIdValue = messageId;
-    
-    // чекаем, что значения валидны
-    if (!chatIdValue || !messageIdValue) {
-        console.error('❌ Пустые параметры:', { chatIdValue, messageIdValue });
-        return false;
-    }
-    
-    // чекаем, что messageId положительный
-    if (messageIdValue <= 0) {
-        console.error('❌ Неверный messageId:', messageIdValue);
-        return false;
-    }
-    
-    return true;
 }
 
     async handleCommand(command, args, message, chatId, senderId, messageId) {
@@ -2905,50 +2609,6 @@ async scanQRCode(args, message, chatId, senderId, messageId) {
         console.error('Общая ошибка сканирования QR:', error);
         await this.editMessage(chatId, messageId, 
             `❌ Ошибка сканирования: ${error.message}`
-        );
-    }
-}
-
-async tryAlternativeQRDecoding(buffer, chatId, messageId) {
-    try {
-        // Пробуем конвертировать в разные форматы
-        const sharp = require('sharp');
-        
-        // Конвертируем в PNG если нужно
-        const pngBuffer = await sharp(buffer)
-            .png()
-            .toBuffer();
-            
-        const png = PNG.sync.read(pngBuffer);
-        const qrCode = jsQR(png.data, png.width, png.height);
-        
-        if (qrCode) {
-            await this.editMessage(chatId, messageId, 
-                `✅ QR-код распознан (альтернативный метод)!\n\n` +
-                `📝 Содержимое:\n` +
-                `\`\`\`\n${qrCode.data}\n\`\`\``
-            );
-            return;
-        }
-        
-        // Если все методы не сработали
-        await this.editMessage(chatId, messageId, 
-            `❌ QR-код не найден на изображении\n\n` +
-            `💡 Советы по улучшению распознавания:\n` +
-            `• Убедитесь, что QR-код четкий и не размытый\n` +
-            `• Избегайте искажений и бликов на фото\n` +
-            `• Попробуйте сделать фото при хорошем освещении\n` +
-            `• Убедитесь, что весь QR-код виден в кадре`
-        );
-        
-    } catch (altError) {
-        console.error('Ошибка альтернативного декодирования:', altError);
-        await this.editMessage(chatId, messageId, 
-            `❌ Не удалось распознать QR-код\n\n` +
-            `💡 Возможно:\n` +
-            `• Это не QR-код\n` +
-            `• Изображение повреждено\n` +
-            `• QR-код слишком сложный для распознавания`
         );
     }
 }
@@ -3972,76 +3632,6 @@ async tryAlternativeQRDecoding(buffer, chatId, messageId) {
     );
 }
 
-    async editTrigger(args, chatId, messageId) {
-    if (args.length < 3) {
-        throw new Error('Укажите слово и новые ответы для редактирования');
-    }
-    
-    const triggerWord = args[1];
-    const trigger = this.settings.triggers.get(triggerWord.toLowerCase());
-    
-    if (!trigger) {
-        throw new Error(`Триггер "${triggerWord}" не найден`);
-    }
-    
-    // Получаем новые ответы (все что после слова)
-    const newResponses = args.slice(2).join(' ').split('|').map(r => r.trim()).filter(r => r);
-    
-    if (newResponses.length === 0) {
-        throw new Error('Укажите новые ответы для триггера');
-    }
-    
-    trigger.responses = newResponses;
-    
-    // Обновляем в базе
-    await this.saveTriggerToDatabase(trigger);
-    await this.saveAllData();
-    
-    await this.editMessage(chatId, messageId, 
-        `✅ Триггер "${triggerWord}" обновлен\n` +
-        `🔸 Новые ответы: ${newResponses.length}\n` +
-        `📊 Всего использований: ${trigger.settings.used}`
-    );
-}
-
-    async showTriggerInfo(triggerWord, chatId, messageId) {
-    const trigger = this.settings.triggers.get(triggerWord.toLowerCase());
-    
-    if (!trigger) {
-        await this.editMessage(chatId, messageId, `❌ Триггер "${triggerWord}" не найден`);
-        return;
-    }
-    
-    const settings = trigger.settings;
-    const lastUsed = settings.lastUsed ? 
-        new Date(settings.lastUsed).toLocaleString('ru-RU') : 'Никогда';
-    
-    const status = settings.enabled ? '✅ ВКЛЮЧЕН' : '❌ ВЫКЛЮЧЕН';
-    
-    let response = `📋 ИНФОРМАЦИЯ О ТРИГГЕРЕ\n\n` +
-                  `🔸 Слово: ${trigger.word}\n` +
-                  `🔸 Статус: ${status}\n` +
-                  `🔸 Создан: ${new Date(settings.created).toLocaleString('ru-RU')}\n` +
-                  `🔸 Использован: ${settings.used} раз\n` +
-                  `🔸 Последнее использование: ${lastUsed}\n\n` +
-                  `⚙️ НАСТРОЙКИ:\n` +
-                  `• Повторов: ${settings.count}\n` +
-                  `• Задержка: ${settings.delay}мс\n` +
-                  `• Шанс: ${settings.chance}%\n` +
-                  `• Кулдаун: ${settings.cooldown}сек\n` +
-                  `• Режим: ${settings.regex ? 'REGEX' : 'Текст'}\n` +
-                  `• Регистр: ${settings.caseSensitive ? 'Чувствителен' : 'Не чувствителен'}\n` +
-                  `• Ответ: ${settings.reply ? 'Да' : 'Нет'}\n` +
-                  `• Тихий: ${settings.silent ? 'Да' : 'Нет'}\n\n` +
-                  `💬 ОТВЕТЫ (${trigger.responses.length}):\n`;
-    
-    trigger.responses.forEach((resp, index) => {
-        response += `${index + 1}. ${resp}\n`;
-    });
-    
-    await this.editMessage(chatId, messageId, response);
-}
-
     async toggleTrigger(triggerWord, enabled, chatId, messageId) {
     const trigger = this.settings.triggers.get(triggerWord.toLowerCase());
     
@@ -4058,52 +3648,6 @@ async tryAlternativeQRDecoding(buffer, chatId, messageId) {
     
     const status = enabled ? 'ВКЛЮЧЕН ✅' : 'ВЫКЛЮЧЕН ❌';
     await this.editMessage(chatId, messageId, `✅ Триггер "${triggerWord}" ${status}`);
-}
-
-    async listTriggersEnhanced(chatId, messageId) {
-    if (this.settings.triggers.size === 0) {
-        await this.editMessage(chatId, messageId, `📋 Триггеры не настроены`);
-        return;
-    }
-    
-    let enabledCount = 0;
-    let disabledCount = 0;
-    let totalUses = 0;
-    
-    this.settings.triggers.forEach(trigger => {
-        if (trigger.settings.enabled) enabledCount++;
-        else disabledCount++;
-        totalUses += trigger.settings.used;
-    });
-    
-    let response = `📋 РАСШИРЕННЫЕ ТРИГГЕРЫ\n\n` +
-                  `📊 Статистика:\n` +
-                  `• Всего: ${this.settings.triggers.size}\n` +
-                  `• Активных: ${enabledCount}\n` +
-                  `• Отключенных: ${disabledCount}\n` +
-                  `• Всего использований: ${totalUses}\n\n` +
-                  `🔔 СПИСОК ТРИГГЕРОВ:\n\n`;
-    
-    let index = 1;
-    this.settings.triggers.forEach((trigger, word) => {
-        const status = trigger.settings.enabled ? '✅' : '❌';
-        response += `${status} ${index}. "${word}" (исп. ${trigger.settings.used} раз)\n`;
-        index++;
-    });
-    
-    response += `\n💡 Используйте ${this.settings.prefix}триггер info [слово] для подробностей`;
-    
-    // Если триггеров много, разбиваем на части
-    if (response.length > 4000) {
-        const mid = Math.floor(response.length / 2);
-        const firstPart = response.substring(0, mid);
-        const secondPart = response.substring(mid);
-        
-        await this.editMessage(chatId, messageId, firstPart);
-        await this.telegramClient.sendMessage(chatId, { message: secondPart });
-    } else {
-        await this.editMessage(chatId, messageId, response);
-    }
 }
 
 async clearTriggers(chatId, messageId) {
@@ -4159,49 +3703,6 @@ async clearTriggers(chatId, messageId) {
             `• Вручную удалить файл bot_database.sqlite`
         );
     }
-}
-
-async showTriggersStats(chatId, messageId) {
-    if (this.settings.triggers.size === 0) {
-        await this.editMessage(chatId, messageId, `📊 Нет данных о триггерах`);
-        return;
-    }
-    
-    let totalUses = 0;
-    let mostUsedTrigger = { word: '', uses: 0 };
-    let recentlyUsed = null;
-    
-    this.settings.triggers.forEach(trigger => {
-        totalUses += trigger.settings.used;
-        
-        if (trigger.settings.used > mostUsedTrigger.uses) {
-            mostUsedTrigger = { word: trigger.word, uses: trigger.settings.used };
-        }
-        
-        if (trigger.settings.lastUsed && (!recentlyUsed || 
-            new Date(trigger.settings.lastUsed) > new Date(recentlyUsed.lastUsed))) {
-            recentlyUsed = { word: trigger.word, lastUsed: trigger.settings.lastUsed };
-        }
-    });
-    
-    const avgUses = Math.round(totalUses / this.settings.triggers.size);
-    
-    let response = `📊 СТАТИСТИКА ТРИГГЕРОВ\n\n` +
-                  `• Всего триггеров: ${this.settings.triggers.size}\n` +
-                  `• Всего использований: ${totalUses}\n` +
-                  `• Среднее использование: ${avgUses} раз\n\n`;
-    
-    if (mostUsedTrigger.uses > 0) {
-        response += `🏆 Самый популярный:\n` +
-                   `"${mostUsedTrigger.word}" - ${mostUsedTrigger.uses} раз\n\n`;
-    }
-    
-    if (recentlyUsed) {
-        response += `⏰ Последний использованный:\n` +
-                   `"${recentlyUsed.word}" - ${new Date(recentlyUsed.lastUsed).toLocaleString('ru-RU')}`;
-    }
-    
-    await this.editMessage(chatId, messageId, response);
 }
 
     async saveTriggerToDatabase(trigger) {
@@ -4415,28 +3916,6 @@ async normalizeEmoji(emoji, userId = null) {
     // Для обычных пользователей - нормализация
     console.log(`🔹 Обычный пользователь, нормализуем эмодзи: ${emoji}`);
     return this.normalizeEmojiForRegularUser(emoji);
-}
-
-// Альтернативный метод отправки реакций
-async alternativeSendReaction(chatId, messageId, reactionEmoji) {
-    try {
-        // Метод через прямые сообщения
-        const result = await this.telegramClient.invoke(
-            new Api.messages.SendReaction({
-                peer: await this.telegramClient.getInputEntity(chatId),
-                msgId: parseInt(messageId),
-                reaction: [
-                    new Api.ReactionEmoji({
-                        emoticon: reactionEmoji
-                    })
-                ]
-            })
-        );
-        console.log('✅ Альтернативный метод реакции успешен');
-        return result;
-    } catch (error) {
-        throw error;
-    }
 }
 
 // Метод нормализации для обычных пользователей
@@ -4870,22 +4349,6 @@ async addEnhancedTrigger(args, message, chatId, messageId) {
     await this.editMessage(chatId, messageId, response);
 }
 
-    // Добавьте этот метод в класс lpbot
-    getTriggerResponsesPreview(trigger) {
-    if (!trigger || !trigger.responses) {
-        return 'Нет ответов';
-    }
-    
-    if (Array.isArray(trigger.responses)) {
-        return trigger.responses.map(response => {
-            const text = String(response || '');
-            return text.substring(0, 30) + (text.length > 30 ? '...' : '');
-        }).join(' | ');
-    }
-    
-    return String(trigger.responses || 'Некорректные ответы');
-}
-
     replaceVariables(text, context = {}) {
     try {
         if (text === null || text === undefined) {
@@ -5073,15 +4536,6 @@ parseClock(timeStr) {
     return hours * 60 + minutes;
 }
 
-async getChatType(chatId) {
-    try {
-        const chat = await this.telegramClient.getEntity(chatId);
-        return chat.className;
-    } catch (error) {
-        return 'Unknown';
-    }
-}
-
 // Добавьте метод для определения критических ошибок
 isFatalSendError(error) {
     const errorMessage = error.message || '';
@@ -5119,39 +4573,6 @@ isFatalSendError(error) {
     // По умолчанию считаем ерор не-критической
     console.log(`⚠️ Неизвестная ошибка: ${errorMessage}`);
     return false;
-}
-
-async checkPermissions(args, message, chatId, senderId, messageId) {
-    try {
-        const chat = await this.telegramClient.getEntity(chatId);
-        const chatType = chat.className;
-        
-        let response = `🔐 ДИАГНОСТИКА ЧАТА:\n\n`;
-        response += `• ID чата: ${chatId}\n`;
-        response += `• Тип: ${chatType}\n`;
-        
-        if (chat.title) response += `• Название: ${chat.title}\n`;
-        if (chat.username) response += `• Юзернейм: @${chat.username}\n`;
-        
-        // Пробуем отправить тестовое сообщение
-        try {
-            await this.telegramClient.sendMessage(chatId, {
-                message: '✅ Тестовое сообщение от бота',
-                silent: true
-            });
-            response += `• Отправка сообщений: ✅ РАБОТАЕТ\n`;
-        } catch (sendError) {
-            response += `• Отправка сообщений: ❌ ОШИБКА\n`;
-            response += `• Ошибка: ${sendError.message}\n`;
-        }
-        
-        await this.editMessage(chatId, messageId, response);
-        
-    } catch (error) {
-        await this.editMessage(chatId, messageId, 
-            `❌ Ошибка диагностики: ${error.message}`
-        );
-    }
 }
 
 async exportTriggers(chatId, messageId) {
@@ -5578,43 +4999,6 @@ async checkPremiumStatus(args, message, chatId, senderId, messageId) {
         
     } catch (error) {
         await this.editMessage(chatId, messageId, `❌ Ошибка проверки Premium статуса: ${error.message}`);
-    }
-}
-
-    async checkReactionSupport(chatId, messageId) {
-    try {
-        const chat = await this.telegramClient.getEntity(chatId);
-        console.log(`🔍 Проверка поддержки реакций в чате ${chatId}:`, {
-            className: chat.className,
-            title: chat.title,
-            username: chat.username
-        });
-        
-        // Пробуем отправить тестовую реакцию
-        const peer = await this.telegramClient.getInputEntity(chatId);
-        
-        const result = await this.telegramClient.invoke(
-            new Api.messages.SendReaction({
-                peer: peer,
-                msgId: messageId,
-                reaction: [
-                    new Api.ReactionEmoji({
-                        emoticon: '👍'
-                    })
-                ]
-            })
-        );
-        
-        console.log('✅ Тест реакции успешен:', result);
-        return true;
-        
-    } catch (error) {
-        console.error('❌ Ошибка теста реакции:', {
-            message: error.message,
-            code: error.code,
-            className: error.className
-        });
-        return false;
     }
 }
 
@@ -6094,38 +5478,6 @@ async manageTriggerGroups(args, chatId, messageId) {
         }
     }
 
-    async forwardMentions(args, message, chatId, senderId, messageId) {
-        try {
-            const mentions = await this.telegramClient.getMessages(chatId, {
-                search: '@',
-                limit: 50
-            });
-            
-            if (mentions.length === 0) {
-                await this.editMessage(chatId, messageId, `📨 Упоминаний не найдено`);
-                return;
-            }
-            
-            let forwarded = 0;
-            for (const msg of mentions) {
-                try {
-                    await this.telegramClient.forwardMessages(chatId, {
-                        messages: [msg.id],
-                        fromPeer: chatId
-                    });
-                    forwarded++;
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                } catch (error) {
-                    console.error(`❌ Ошибка пересылки: ${error.message}`);
-                }
-            }
-            
-            await this.editMessage(chatId, messageId, `✅ Переслано ${forwarded} упоминаний`);
-        } catch (error) {
-            await this.editMessage(chatId, messageId, `❌ Ошибка: ${error.message}`);
-        }
-    }
-
     async deleteMessages(args, message, chatId, senderId, messageId) {
     try {
         let messagesToDelete = [messageId]; // Всегда удаляем сообщение с командой
@@ -6326,35 +5678,6 @@ async manageTriggerGroups(args, chatId, messageId) {
         await this.editMessage(chatId, messageId, errorMessage);
     }
 }
-
-    async chatMove(args, message, chatId, senderId, messageId) {
-        if (args.length === 0) {
-            await this.editMessage(chatId, messageId, 
-                `🚚 Использование: ${this.settings.prefix}переезд [новый_чатид]`
-            );
-            return;
-        }
-        
-        const newChatId = args[0];
-        try {
-            const participants = await this.telegramClient.getParticipants(chatId);
-            let moved = 0;
-            
-            for (const participant of participants) {
-                try {
-                    await this.telegramClient.addChatUser(newChatId, participant.id);
-                    moved++;
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                } catch (error) {
-                    console.error(`❌ Ошибка перемещения ${participant.id}: ${error.message}`);
-                }
-            }
-            
-            await this.editMessage(chatId, messageId, `✅ Перемещено ${moved} участников`);
-        } catch (error) {
-            await this.editMessage(chatId, messageId, `❌ Ошибка: ${error.message}`);
-        }
-    }
 
     // Добавьте этот метод для проверки Premium статуса пользователя
 async checkUserPremium(userId) {
@@ -7808,268 +7131,6 @@ async showTimerHelp(chatId, messageId) {
                     `• Таймеры НЕ удаляются после использования\n` +
                     `• Можно переиспользовать многократно\n` +
                     `• История использования сохраняется`;
-
-    await this.editMessage(chatId, messageId, helpText);
-}
-
-/**
- * Расширенное добавление таймера с поддержкой параметров
- */
-async addEnhancedTimer(args, message, chatId, senderId, messageId) {
-    if (args.length < 2) {
-        throw new Error('Укажите название таймера и время\nПример: !таймер add мой_таймер 5м30с "Сообщение" -repeat 5 -silent');
-    }
-
-    const timerName = args[0];
-    const timeStr = args[1];
-    let messageText = '';
-    let settings = {
-        silent: false,
-        pin: false,
-        reply: false,
-        repeat: 0, // 0 = одноразовый
-        deleteAfter: 0
-    };
-
-    // Парсим аргументы с параметрами
-    let responseParts = [];
-    let i = 2;
-    
-    // Сначала собираем текст сообщения (до параметров)
-    while (i < args.length && !args[i].startsWith('-')) {
-        responseParts.push(args[i]);
-        i++;
-    }
-
-    // Затем обрабатываем параметры
-    while (i < args.length) {
-        if (args[i].startsWith('-')) {
-            const param = args[i].substring(1);
-            const value = i + 1 < args.length ? args[i + 1] : null;
-
-            switch (param) {
-                case 'repeat':
-                case 'повтор':
-                    if (value && !isNaN(value)) {
-                        settings.repeat = Math.max(parseInt(value), 0);
-                        i++;
-                    }
-                    break;
-                    
-                case 'silent':
-                case 'тихий':
-                    settings.silent = true;
-                    break;
-                    
-                case 'pin':
-                case 'закрепить':
-                    settings.pin = true;
-                    break;
-                    
-                case 'reply':
-                case 'ответить':
-                    settings.reply = true;
-                    break;
-                    
-                case 'delete_after':
-                case 'удалить_через':
-                    if (value && !isNaN(value)) {
-                        settings.deleteAfter = parseInt(value);
-                        i++;
-                    }
-                    break;
-                    
-                case 'chat':
-                case 'чат':
-                    if (value) {
-                        // Можно указать чат для отправки (по умолчанию - текущий)
-                        settings.targetChat = value;
-                        i++;
-                    }
-                    break;
-            }
-        }
-        i++;
-    }
-
-    // Собираем текст сообщения
-    messageText = responseParts.join(' ');
-
-    // Если нет текста сообщения, используем текст из replied сообщения
-    if (!messageText && message.replyTo && message.replyTo.replyToMsgId) {
-        const repliedMessages = await this.telegramClient.getMessages(chatId, {
-            ids: [message.replyTo.replyToMsgId]
-        });
-        
-        if (repliedMessages[0] && repliedMessages[0].text) {
-            messageText = repliedMessages[0].text;
-        }
-    }
-
-    if (!messageText) {
-        throw new Error('Укажите текст сообщения для таймера или ответьте на сообщение');
-    }
-
-    // Парсим время
-    const seconds = this.parseTime(timeStr);
-    const triggerTime = new Date(Date.now() + seconds * 1000);
-
-    await this.editMessage(chatId, messageId, `⏰ Создаю расширенный таймер "${timerName}"...`);
-
-    // Создаем объект таймера
-    const timer = {
-        name: timerName,
-        chatId: settings.targetChat || chatId,
-        messageText: messageText,
-        triggerTime: triggerTime,
-        intervalSeconds: seconds,
-        repeatCount: settings.repeat,
-        currentCount: 0,
-        enabled: true,
-        createdBy: senderId,
-        createdAt: new Date(),
-        lastTriggered: null,
-        settings: settings
-    };
-
-    // Сохраняем в базу
-    await this.saveTimerToDatabase(timer);
-    
-    // Запускаем таймер
-    await this.startTimer(timer);
-
-    const formattedTime = this.formatTime(seconds);
-    const repeatInfo = settings.repeat > 0 ? `🔸 Повторов: ${settings.repeat}\n` : '';
-    const settingsInfo = [
-        settings.silent ? '🔇 Тихий' : '',
-        settings.pin ? '📌 Закрепить' : '',
-        settings.reply ? '↩️ Ответить' : '',
-        settings.deleteAfter > 0 ? `🗑️ Удалить через ${settings.deleteAfter}с` : ''
-    ].filter(Boolean).join(', ');
-    
-    await this.editMessage(chatId, messageId, 
-        `✅ РАСШИРЕННЫЙ ТАЙМЕР СОЗДАН\n\n` +
-        `🔸 Название: ${timerName}\n` +
-        `🔸 Время: ${formattedTime}\n` +
-        `🔸 Сработает: ${triggerTime.toLocaleString('ru-RU')}\n` +
-        repeatInfo +
-        `🔸 Настройки: ${settingsInfo || 'стандартные'}\n` +
-        `🔸 Сообщение: ${messageText.substring(0, 50)}${messageText.length > 50 ? '...' : ''}\n\n` +
-        `💡 Команды:\n` +
-        `• ${this.settings.prefix}таймер удалить ${timerName}\n` +
-        `• ${this.settings.prefix}таймер инфо ${timerName}\n` +
-        `• ${this.settings.prefix}таймеры - список всех таймеров`
-    );
-}
-
-/**
- * Расширенное выполнение таймера
- */
-async executeEnhancedTimer(timer) {
-    try {
-        console.log(`🔔 Сработал таймер: "${timer.name}"`);
-        
-        let messageOptions = {
-            message: `${timer.messageText}`,
-            silent: timer.settings.silent
-        };
-
-        // Отправляем сообщение
-        const sentMessage = await this.telegramClient.sendMessage(timer.chatId, messageOptions);
-
-        // Закрепляем сообщение если нужно
-        if (timer.settings.pin && sentMessage) {
-            try {
-                await this.telegramClient.pinMessage(timer.chatId, sentMessage.id);
-            } catch (pinError) {
-                console.error(`❌ Не удалось закрепить сообщение:`, pinError.message);
-            }
-        }
-
-        // Удаляем сообщение через указанное время
-        if (timer.settings.deleteAfter > 0 && sentMessage) {
-            setTimeout(async () => {
-                try {
-                    await this.telegramClient.deleteMessages(timer.chatId, [sentMessage.id]);
-                } catch (deleteError) {
-                    console.error(`❌ Не удалось удалить сообщение:`, deleteError.message);
-                }
-            }, timer.settings.deleteAfter * 1000);
-        }
-
-        // Обновляем статистику
-        timer.lastTriggered = new Date();
-        timer.currentCount++;
-
-        // Если это повторяющийся таймер и не достигнут лимит, перезапускаем
-        if (timer.repeatCount > 0 && timer.currentCount < timer.repeatCount) {
-            timer.triggerTime = new Date(Date.now() + timer.intervalSeconds * 1000);
-            await this.saveTimerToDatabase(timer);
-            await this.startTimer(timer);
-            console.log(`🔄 Таймер "${timer.name}" перезапущен (${timer.currentCount}/${timer.repeatCount})`);
-        } else if (timer.repeatCount === 0) {
-            // Удаляем одноразовый таймер
-            await this.removeTimerFromDatabase(timer.name);
-            this.settings.timers.delete(timer.name);
-            this.timerIntervals.delete(timer.name);
-            console.log(`🗑️ Одноразовый таймер "${timer.name}" удален`);
-        }
-
-    } catch (error) {
-        console.error(`❌ Ошибка отправки сообщения таймера "${timer.name}":`, error);
-        
-        // Пробуем отправить сообщение об ошибке
-        try {
-            await this.telegramClient.sendMessage(timer.chatId, {
-                message: `❌ Ошибка таймера "${timer.name}": ${error.message}`
-            });
-        } catch (e) {
-            console.error('Не удалось отправить сообщение об ошибке:', e);
-        }
-    }
-}
-
-/**
- * Расширенная справка по таймерам
- */
-async showEnhancedTimerHelp(chatId, messageId) {
-    const helpText = `⏰ РАСШИРЕННЫЕ ТАЙМЕРЫ v2.0\n\n` +
-
-                    `⏱️ ФОРМАТЫ ВРЕМЕНИ:\n` +
-                    `• с, сек - секунды (30с, 10сек)\n` +
-                    `• м, мин - минуты (5м, 10мин)\n` +
-                    `• ч, час - часы (2ч, 3час)\n` +
-                    `• д, день - дни (1д, 2дня)\n` +
-                    `• н, нед - недели (1н, 2нед)\n` +
-                    `• мес - месяцы (1мес)\n` +
-                    `• г, год - годы (1г, 2года)\n\n` +
-
-                    `💾 СОЗДАНИЕ ТАЙМЕРА:\n` +
-                    `${this.settings.prefix}таймер add [название] [время] [текст] [параметры]\n\n` +
-
-                    `⚙️ РАСШИРЕННЫЕ ПАРАМЕТРЫ:\n` +
-                    `• -repeat N - количество повторов (0 = одноразовый)\n` +
-                    `• -silent - тихий режим (без уведомлений)\n` +
-                    `• -pin - закрепить сообщение\n` +
-                    `• -reply - ответить на текущее сообщение\n` +
-                    `• -delete_after N - удалить сообщение через N секунд\n` +
-                    `• -chat ID - отправить в указанный чат\n\n` +
-
-                    `📋 КОМАНДЫ УПРАВЛЕНИЯ:\n` +
-                    `• ${this.settings.prefix}таймеры - список всех таймеров\n` +
-                    `• ${this.settings.prefix}таймер удалить [название] - удалить таймер\n` +
-                    `• ${this.settings.prefix}таймер инфо [название] - информация о таймере\n` +
-                    `• ${this.settings.prefix}таймер включить [название] - включить таймер\n` +
-                    `• ${this.settings.prefix}таймер выключить [название] - выключить таймер\n` +
-                    `• ${this.settings.prefix}таймер сработать [название] - принудительно запустить\n\n` +
-
-                    `🎯 ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ:\n` +
-                    `• ${this.settings.prefix}таймер add уведомление 30м "Проверить задачи" -silent\n` +
-                    `• ${this.settings.prefix}таймер add напоминание 1ч "Встреча" -repeat 5 -pin\n` +
-                    `• ${this.settings.prefix}таймер add автоудаление 10с "Секретное сообщение" -delete_after 30\n` +
-                    `• ${this.settings.prefix}таймер add ежедневное 1д "Ежедневный отчет" -repeat 365\n\n` +
-
-                    `💡 Таймеры сохраняются при перезагрузке бота и автоматически восстанавливаются!`;
 
     await this.editMessage(chatId, messageId, helpText);
 }
