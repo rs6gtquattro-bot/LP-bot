@@ -175,11 +175,11 @@
 
     <script src="/js/app.js"></script>
     <script>
-    async function saveSettings(event) {
+    async function postSettings(event, form) {
         event.preventDefault();
-        const formData = new FormData(event.target);
-        const data = Object.fromEntries(formData);
-        
+        const data = Object.fromEntries(new FormData(event.target));
+        data.form = form;
+
         try {
             const response = await fetch('/settings', {
                 method: 'POST',
@@ -189,24 +189,16 @@
                 body: JSON.stringify(data)
             });
             const result = await response.json();
-            
+
             dashboard.showNotification(result.message, result.success ? 'success' : 'error');
         } catch (error) {
             dashboard.showNotification('Ошибка сохранения настроек', 'error');
         }
     }
 
-    async function saveCustomSettings(event) {
-        event.preventDefault();
-        // Реализация сохранения кастомных значений
-        dashboard.showNotification('Функция в разработке', 'info');
-    }
-
-    async function saveAutoStatusSettings(event) {
-        event.preventDefault();
-        // Реализация сохранения авто-статуса
-        dashboard.showNotification('Функция в разработке', 'info');
-    }
+    function saveSettings(event) { return postSettings(event, 'main'); }
+    function saveCustomSettings(event) { return postSettings(event, 'custom'); }
+    function saveAutoStatusSettings(event) { return postSettings(event, 'autostatus'); }
 
     function resetCustomSettings() {
         if (confirm('Сбросить все кастомные значения?')) {

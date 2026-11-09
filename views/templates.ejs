@@ -89,7 +89,6 @@
                                         <%= template.last_used ? new Date(template.last_used).toLocaleString('ru-RU') : 'Никогда' %>
                                     </div>
                                     <div style="flex: 1;">
-                                        <button onclick="useTemplate('<%= template.name %>')" class="btn primary small">Использовать</button>
                                         <button onclick="deleteTemplate('<%= template.name %>')" class="btn danger small">Удалить</button>
                                     </div>
                                 </div>
@@ -147,19 +146,14 @@
         return names[type] || type;
     }
 
-    async function useTemplate(name) {
-        dashboard.showNotification(`Использование шаблона: ${name}`, 'info');
-        // В реальном приложении здесь будет вызов API
-    }
-
     async function deleteTemplate(name) {
         if (!confirm(`Удалить шаблон "${name}"?`)) return;
-        
+
         try {
-            // Здесь будет вызов API для удаления шаблона
-            dashboard.showNotification(`Шаблон "${name}" удален`, 'success');
-            // Перезагружаем список
-            setTimeout(() => location.reload(), 1000);
+            const response = await fetch(`/api/templates/${encodeURIComponent(name)}`, { method: 'DELETE' });
+            const result = await response.json();
+            dashboard.showNotification(result.message, result.success ? 'success' : 'error');
+            if (result.success) setTimeout(() => location.reload(), 1000);
         } catch (error) {
             dashboard.showNotification('Ошибка удаления шаблона', 'error');
         }
@@ -207,7 +201,7 @@
 
     // Статистика по типам шаблонов
     document.addEventListener('DOMContentLoaded', () => {
-        const templates = <%= JSON.stringify(templates) %>;
+        const templates = <%- JSON.stringify(templates).replace(/</g, '\\u003c') %>;
         const textCount = templates.filter(t => t.content_type === 'text').length;
         const mediaCount = templates.filter(t => t.content_type !== 'text').length;
         

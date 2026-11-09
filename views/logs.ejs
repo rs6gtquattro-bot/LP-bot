@@ -192,6 +192,7 @@
 
     function clearLogs() {
         if (confirm('Очистить все логи?')) {
+            fetch('/api/logs', { method: 'DELETE' }).catch(() => {});
             allLogs = [];
             displayLogs([]);
             updateStats([]);
