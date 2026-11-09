@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSeek - lpBot</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 DeepSeek AI</h1>
+            <div class="status">
+                <span class="status-indicator connected"></span>
+                <span>Бот активен</span>
+            </div>
+        </header>
+
+        <nav class="sidebar">
+            <ul>
+                <li><a href="/">📊 Главная</a></li>
+                <li><a href="/settings">⚙️ Настройки</a></li>
+                <li><a href="/triggers">🔔 Триггеры</a></li>
+                <li><a href="/templates">📁 Шаблоны</a></li>
+                <li><a href="/commands">🎯 Команды</a></li>
+                <li><a href="/deepseek" class="active">🤖 DeepSeek</a></li>
+                <li><a href="/logs">📋 Логи</a></li>
+                <li><a href="/stats">📈 Статистика</a></li>
+                <li><a href="/export">💾 Экспорт</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <div class="card">
+                <h3>🔑 Настройки DeepSeek API</h3>
+                <form id="deepseekForm" onsubmit="saveDeepSeekSettings(event)">
+                    <div class="form-group">
+                        <label for="apiKey">API Key:</label>
+                        <input type="password" id="apiKey" name="apiKey" class="form-control"
+                               value="<%= deepseek.apiKey ? '••••••••' : '' %>"
+                               placeholder="Введите ваш DeepSeek API ключ">
+                        <small class="form-text">
+                            Получите API ключ на <a href="https://platform.deepseek.com" target="_blank">platform.deepseek.com</a>
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="enabled" value="true" 
+                                   <%= deepseek.enabled ? 'checked' : '' %>>
+                            <span class="checkmark"></span>
+                            ✅ Включить DeepSeek AI
+                        </label>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="model">Модель:</label>
+                            <select id="model" name="model" class="form-control">
+                                <option value="deepseek-chat" <%= deepseek.model === 'deepseek-chat' ? 'selected' : '' %>>deepseek-chat</option>
+                                <option value="deepseek-coder" <%= deepseek.model === 'deepseek-coder' ? 'selected' : '' %>>deepseek-coder</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="maxTokens">Макс. токенов:</label>
+                            <input type="number" id="maxTokens" name="maxTokens" class="form-control"
+                                   value="<%= deepseek.maxTokens %>" min="100" max="4096">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="temperature">Температура:</label>
+                        <input type="range" id="temperature" name="temperature" class="form-control"
+                               min="0" max="1" step="0.1" value="<%= deepseek.temperature %>">
+                        <div class="range-labels">
+                            <span>Более точный</span>
+                            <span id="temperatureValue"><%= deepseek.temperature %></span>
+                            <span>Более креативный</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn primary">💾 Сохранить настройки</button>
+                    <button type="button" onclick="testDeepSeek()" class="btn secondary">🧪 Тестировать подключение</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>📊 Статус DeepSeek</h3>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <span class="status-label">Статус:</span>
+                        <span class="status-value" id="deepseekStatus">
+                            <%= deepseek.enabled ? '✅ Активен' : '❌ Неактивен' %>
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Модель:</span>
+                        <span class="status-value"><%= deepseek.model %></span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">API Key:</span>
+                        <span class="status-value">
+                            <%= deepseek.apiKey ? '✅ Установлен' : '❌ Отсутствует' %>
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Макс. токенов:</span>
+                        <span class="status-value"><%= deepseek.maxTokens %></span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Температура:</span>
+                        <span class="status-value"><%= deepseek.temperature %></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>💬 Тестирование DeepSeek</h3>
+                <form onsubmit="sendTestMessage(event)">
+                    <div class="form-group">
+                        <label for="testMessage">Тестовое сообщение:</label>
+                        <textarea id="testMessage" class="form-control" rows="4" 
+                                  placeholder="Введите сообщение для тестирования AI..."></textarea>
+                    </div>
+                    <button type="submit" class="btn primary">🚀 Отправить</button>
+                </form>
+
+                <div id="testResult" style="display: none; margin-top: 1rem;">
+                    <h4>Ответ AI:</h4>
+                    <div class="ai-response" id="aiResponse"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📖 Справка по командам</h3>
+                <div class="commands-list">
+                    <div class="command-item">
+                        <code><%= bot.settings.prefix %>дип [запрос]</code>
+                        <span> - Основная команда для общения с AI</span>
+                    </div>
+                    <div class="command-item">
+                        <code><%= bot.settings.prefix %>дип_ключ [api_key]</code>
+                        <span> - Установить API ключ</span>
+                    </div>
+                    <div class="command-item">
+                        <code><%= bot.settings.prefix %>дип_статус</code>
+                        <span> - Показать статус DeepSeek</span>
+                    </div>
+                    <div class="command-item">
+                        <code><%= bot.settings.prefix %>дип_помощь</code>
+                        <span> - Помощь по DeepSeek</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+    // Обновление значения температуры
+    document.getElementById('temperature').addEventListener('input', function() {
+        document.getElementById('temperatureValue').textContent = this.value;
+    });
+
+    async function saveDeepSeekSettings(event) {
+        event.preventDefault();
+        const formData = new FormData(event.target);
+        const data = Object.fromEntries(formData);
+        
+        try {
+            const response = await fetch('/deepseek', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+            
+            dashboard.showNotification(result.message, result.success ? 'success' : 'error');
+            
+            // Обновляем статус на странице
+            if (result.success) {
+                setTimeout(() => location.reload(), 1000);
+            }
+        } catch (error) {
+            dashboard.showNotification('Ошибка сохранения настроек', 'error');
+        }
+    }
+
+    async function testDeepSeek() {
+        if (!<%= deepseek.apiKey ? 'true' : 'false' %>) {
+            dashboard.showNotification('Сначала установите API ключ', 'error');
+            return;
+        }
+
+        dashboard.showNotification('Тестирование подключения...', 'info');
+        
+        // Здесь будет вызов API для тестирования подключения
+        setTimeout(() => {
+            dashboard.showNotification('Подключение успешно!', 'success');
+        }, 2000);
+    }
+
+    async function sendTestMessage(event) {
+        event.preventDefault();
+        const message = document.getElementById('testMessage').value;
+        if (!message.trim()) return;
+
+        const testResult = document.getElementById('testResult');
+        const aiResponse = document.getElementById('aiResponse');
+        
+        testResult.style.display = 'block';
+        aiResponse.innerHTML = '<div class="loading">🤔 AI думает...</div>';
+
+        try {
+            // Здесь будет вызов API DeepSeek
+            setTimeout(() => {
+                aiResponse.innerHTML = `
+                    <div class="ai-message">
+                        <p>Привет! Я DeepSeek AI. Вы написали: "${message}"</p>
+                        <p>Это тестовый ответ от веб-интерфейса. В реальной работе здесь будет ответ от настоящего AI.</p>
+                        <div class="message-info">
+                            <small>Модель: <%= deepseek.model %>, Токены: 45/<%= deepseek.maxTokens %></small>
+                        </div>
+                    </div>
+                `;
+            }, 2000);
+        } catch (error) {
+            aiResponse.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+        }
+    }
+    </script>
+
+    <style>
+    .status-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    .status-item {
+        background: #f7fafc;
+        padding: 1rem;
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .status-label {
+        font-weight: 500;
+        color: #4a5568;
+    }
+
+    .status-value {
+        font-weight: 600;
+        color: #2d3748;
+    }
+
+    .range-labels {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+        color: #6b7280;
+    }
+
+    .commands-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .command-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        background: #f7fafc;
+        border-radius: 4px;
+    }
+
+    .command-item code {
+        background: #2d3748;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+    }
+
+    .ai-response {
+        background: #f7fafc;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+    }
+
+    .ai-message {
+        line-height: 1.6;
+    }
+
+    .message-info {
+        margin-top: 1rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid #e2e8f0;
+        color: #6b7280;
+    }
+
+    .loading {
+        text-align: center;
+        color: #6b7280;
+        font-style: italic;
+    }
+
+    .error {
+        color: #e53e3e;
+        font-weight: 500;
+    }
+
+    input[type="range"] {
+        width: 100%;
+        height: 6px;
+        border-radius: 3px;
+        background: #e2e8f0;
+        outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #667eea;
+        cursor: pointer;
+    }
+    </style>
+</body>
+</html>

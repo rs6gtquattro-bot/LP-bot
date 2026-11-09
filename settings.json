@@ -1,0 +1,35 @@
+{
+  "prefix": "‘",
+  "notifications": false,
+  "autoStatus": true,
+  "autoStatusSettings": {
+    "mode": 1,
+    "interval": 60
+  },
+  "autoReadMentions": false,
+  "autoAddFriends": false,
+  "autoLeaveChats": true,
+  "autoUnsubscribe": false,
+  "dynamicCover": false,
+  "muteChat": false,
+  "photoBoost": {
+    "active": false,
+    "mode": 1,
+    "album": null,
+    "count": 0
+  },
+  "customValues": {
+    "uptime": "1488888s",
+    "creator": "ВАШ ОТЕЦ",
+    "version": "beta 14.88.0",
+    "botName": "LP BOT",
+    "status": "🎪 Веселюсь и радуюсь"
+  },
+  "deepseek": {
+    "apiKey": "REDACTED",
+    "enabled": true,
+    "model": "deepseek-chat",
+    "maxTokens": 2048,
+    "temperature": 0.7
+  }
+}

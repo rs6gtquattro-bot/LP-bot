@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Настройки - lpBot</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚙️ Настройки бота</h1>
+            <div class="status">
+                <span class="status-indicator connected"></span>
+                <span>Бот активен</span>
+            </div>
+        </header>
+
+        <nav class="sidebar">
+            <ul>
+                <li><a href="/">📊 Главная</a></li>
+                <li><a href="/settings" class="active">⚙️ Настройки</a></li>
+                <li><a href="/triggers">🔔 Триггеры</a></li>
+                <li><a href="/templates">📁 Шаблоны</a></li>
+                <li><a href="/commands">🎯 Команды</a></li>
+                <li><a href="/deepseek">🤖 DeepSeek</a></li>
+                <li><a href="/logs">📋 Логи</a></li>
+                <li><a href="/stats">📈 Статистика</a></li>
+                <li><a href="/export">💾 Экспорт</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <div class="card">
+                <h3>🔧 Основные настройки</h3>
+                <form id="settingsForm" onsubmit="saveSettings(event)">
+                    <div class="form-group">
+                        <label for="prefix">Префикс команд:</label>
+                        <input type="text" id="prefix" name="prefix" class="form-control" 
+                               value="<%= settings.prefix %>" maxlength="5" required>
+                        <small class="form-text">Символ, с которого начинаются команды бота</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="notifications" value="true" 
+                                   <%= settings.notifications ? 'checked' : '' %>>
+                            <span class="checkmark"></span>
+                            🔔 Включить уведомления
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="autoReadMentions" value="true" 
+                                   <%= settings.autoReadMentions ? 'checked' : '' %>>
+                            <span class="checkmark"></span>
+                            👀 Автопрочитывание упоминаний (автопуши)
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="autoStatus" value="true" 
+                                   <%= settings.autoStatus ? 'checked' : '' %>>
+                            <span class="checkmark"></span>
+                            🔄 Авто-статус
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="autoAddFriends" value="true" 
+                                   <%= settings.autoAddFriends ? 'checked' : '' %>>
+                            <span class="checkmark"></span>
+                            🤝 Автодобавление в друзья
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="autoLeaveChats" value="true" 
+                                   <%= settings.autoLeaveChats ? 'checked' : '' %>>
+                            <span class="checkmark"></span>
+                            🚪 Автовыход из чатов
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="dynamicCover" value="true" 
+                                   <%= settings.dynamicCover ? 'checked' : '' %>>
+                            <span class="checkmark"></span>
+                            🎨 Динамическая обложка
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="muteChat" value="true" 
+                                   <%= settings.muteChat ? 'checked' : '' %>>
+                            <span class="checkmark"></span>
+                            🔇 Заглушить чат
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn primary">💾 Сохранить настройки</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>🎭 Кастомные значения</h3>
+                <form id="customForm" onsubmit="saveCustomSettings(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="botName">Имя бота:</label>
+                            <input type="text" id="botName" name="botName" class="form-control"
+                                   value="<%= settings.customValues.botName || '' %>">
+                        </div>
+                        <div class="form-group">
+                            <label for="creator">Создатель:</label>
+                            <input type="text" id="creator" name="creator" class="form-control"
+                                   value="<%= settings.customValues.creator || '' %>">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="version">Версия:</label>
+                            <input type="text" id="version" name="version" class="form-control"
+                                   value="<%= settings.customValues.version || '' %>">
+                        </div>
+                        <div class="form-group">
+                            <label for="status">Статус:</label>
+                            <input type="text" id="status" name="status" class="form-control"
+                                   value="<%= settings.customValues.status || '' %>">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="uptime">Аптайм (кастомный):</label>
+                        <input type="text" id="uptime" name="uptime" class="form-control"
+                               value="<%= settings.customValues.uptime || '' %>">
+                        <small class="form-text">Оставьте пустым для реального аптайма</small>
+                    </div>
+
+                    <button type="submit" class="btn secondary">💾 Сохранить кастомные значения</button>
+                    <button type="button" onclick="resetCustomSettings()" class="btn danger">🔄 Сбросить</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>⚡ Авто-статус</h3>
+                <form id="autoStatusForm" onsubmit="saveAutoStatusSettings(event)">
+                    <div class="form-group">
+                        <label for="autoStatusMode">Режим авто-статуса:</label>
+                        <select id="autoStatusMode" name="mode" class="form-control">
+                            <option value="1" <%= settings.autoStatusSettings.mode == 1 ? 'selected' : '' %>>Случайные цитаты</option>
+                            <option value="2" <%= settings.autoStatusSettings.mode == 2 ? 'selected' : '' %>>Время и дата</option>
+                            <option value="3" <%= settings.autoStatusSettings.mode == 3 ? 'selected' : '' %>>Статистика бота</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="autoStatusInterval">Интервал (секунды):</label>
+                        <input type="number" id="autoStatusInterval" name="interval" class="form-control"
+                               value="<%= settings.autoStatusSettings.interval %>" min="30" max="3600">
+                    </div>
+
+                    <button type="submit" class="btn primary">💾 Сохранить настройки авто-статуса</button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+    async function saveSettings(event) {
+        event.preventDefault();
+        const formData = new FormData(event.target);
+        const data = Object.fromEntries(formData);
+        
+        try {
+            const response = await fetch('/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+            
+            dashboard.showNotification(result.message, result.success ? 'success' : 'error');
+        } catch (error) {
+            dashboard.showNotification('Ошибка сохранения настроек', 'error');
+        }
+    }
+
+    async function saveCustomSettings(event) {
+        event.preventDefault();
+        // Реализация сохранения кастомных значений
+        dashboard.showNotification('Функция в разработке', 'info');
+    }
+
+    async function saveAutoStatusSettings(event) {
+        event.preventDefault();
+        // Реализация сохранения авто-статуса
+        dashboard.showNotification('Функция в разработке', 'info');
+    }
+
+    function resetCustomSettings() {
+        if (confirm('Сбросить все кастомные значения?')) {
+            document.getElementById('customForm').reset();
+            dashboard.showNotification('Кастомные значения сброшены', 'success');
+        }
+    }
+    </script>
+
+    <style>
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        margin-bottom: 0.5rem;
+    }
+
+    .checkbox-label input {
+        margin-right: 0.5rem;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    .form-text {
+        color: #6b7280;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+
+    @media (max-width: 768px) {
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+    }
+    </style>
+</body>
+</html>

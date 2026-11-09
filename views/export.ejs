@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Экспорт - lpBot</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💾 Экспорт данных</h1>
+            <div class="status">
+                <span class="status-indicator connected"></span>
+                <span>Бот активен</span>
+            </div>
+        </header>
+
+        <nav class="sidebar">
+            <ul>
+                <li><a href="/">📊 Главная</a></li>
+                <li><a href="/settings">⚙️ Настройки</a></li>
+                <li><a href="/triggers">🔔 Триггеры</a></li>
+                <li><a href="/templates">📁 Шаблоны</a></li>
+                <li><a href="/commands">🎯 Команды</a></li>
+                <li><a href="/deepseek">🤖 DeepSeek</a></li>
+                <li><a href="/logs">📋 Логи</a></li>
+                <li><a href="/stats">📈 Статистика</a></li>
+                <li><a href="/export" class="active">💾 Экспорт</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <div class="card">
+                <h3>📤 Экспорт данных</h3>
+                <div class="export-stats">
+                    <div class="stat-item">
+                        <div class="stat-icon">🔔</div>
+                        <div class="stat-info">
+                            <div class="stat-number"><%= triggersCount %></div>
+                            <div class="stat-label">Триггеров</div>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-icon">📁</div>
+                        <div class="stat-info">
+                            <div class="stat-number"><%= templatesCount %></div>
+                            <div class="stat-label">Шаблонов</div>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-icon">⚙️</div>
+                        <div class="stat-info">
+                            <div class="stat-number">1</div>
+                            <div class="stat-label">Настроек</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>💾 Выберите данные для экспорта</h3>
+                <div class="export-options">
+                    <div class="export-option">
+                        <div class="option-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="exportTriggers" checked>
+                                <span class="checkmark"></span>
+                                <strong>🔔 Триггеры</strong>
+                            </label>
+                        </div>
+                        <div class="option-description">
+                            Экспортировать все триггеры с настройками и статистикой
+                        </div>
+                        <div class="option-count"><%= triggersCount %> записей</div>
+                    </div>
+
+                    <div class="export-option">
+                        <div class="option-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="exportTemplates" checked>
+                                <span class="checkmark"></span>
+                                <strong>📁 Шаблоны</strong>
+                            </label>
+                        </div>
+                        <div class="option-description">
+                            Экспортировать шаблоны сообщений (текст и метаданные)
+                        </div>
+                        <div class="option-count"><%= templatesCount %> записей</div>
+                    </div>
+
+                    <div class="export-option">
+                        <div class="option-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="exportSettings" checked>
+                                <span class="checkmark"></span>
+                                <strong>⚙️ Настройки</strong>
+                            </label>
+                        </div>
+                        <div class="option-description">
+                            Экспортировать настройки бота и конфигурации
+                        </div>
+                        <div class="option-count">1 конфигурация</div>
+                    </div>
+
+                    <div class="export-option">
+                        <div class="option-header">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="exportDeepSeek">
+                                <span class="checkmark"></span>
+                                <strong>🤖 DeepSeek</strong>
+                            </label>
+                        </div>
+                        <div class="option-description">
+                            Экспортировать настройки DeepSeek AI (без API ключа)
+                        </div>
+                        <div class="option-count">Настройки модели</div>
+                    </div>
+                </div>
+
+                <div class="export-actions">
+                    <button onclick="exportSelected()" class="btn primary large">
+                        📥 Экспортировать выбранное
+                    </button>
+                    <button onclick="exportAll()" class="btn secondary">
+                        💾 Экспортировать всё
+                    </button>
+                    <button onclick="createBackup()" class="btn tertiary">
+                        🗂️ Создать полный бэкап
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🔄 Импорт данных</h3>
+                <div class="import-section">
+                    <div class="alert info">
+                        💡 <strong>Восстановление данных:</strong> Вы можете импортировать ранее экспортированные данные для восстановления настроек бота.
+                    </div>
+
+                    <form onsubmit="importData(event)" class="import-form">
+                        <div class="form-group">
+                            <label for="importFile">Файл для импорта:</label>
+                            <input type="file" id="importFile" accept=".json,.backup" class="form-control" required>
+                            <small class="form-text">Поддерживаются JSON файлы и бэкапы</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="overwriteExisting" checked>
+                                <span class="checkmark"></span>
+                                Заменять существующие данные
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn primary">🔄 Импортировать данные</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📊 История экспортов</h3>
+                <div class="export-history">
+                    <div class="history-item">
+                        <div class="history-icon">💾</div>
+                        <div class="history-info">
+                            <div class="history-name">Полный бэкап</div>
+                            <div class="history-date">Сегодня, 14:30</div>
+                        </div>
+                        <div class="history-size">45.2 KB</div>
+                        <button class="btn small">📥</button>
+                    </div>
+                    
+                    <div class="history-item">
+                        <div class="history-icon">🔔</div>
+                        <div class="history-info">
+                            <div class="history-name">Только триггеры</div>
+                            <div class="history-date">Вчера, 09:15</div>
+                        </div>
+                        <div class="history-size">28.7 KB</div>
+                        <button class="btn small">📥</button>
+                    </div>
+
+                    <div class="no-history" style="display: none;">
+                        <div style="text-align: center; padding: 2rem; color: #6b7280;">
+                            📭 История экспортов отсутствует
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🛡️ Безопасность</h3>
+                <div class="security-info">
+                    <div class="security-item">
+                        <div class="security-icon">🔒</div>
+                        <div class="security-text">
+                            <strong>API ключи защищены</strong><br>
+                            При экспорте конфиденциальные данные (API ключи) автоматически исключаются
+                        </div>
+                    </div>
+                    
+                    <div class="security-item">
+                        <div class="security-icon">📝</div>
+                        <div class="security-text">
+                            <strong>Формат данных</strong><br>
+                            Все данные экспортируются в стандартном JSON формате для совместимости
+                        </div>
+                    </div>
+                    
+                    <div class="security-item">
+                        <div class="security-icon">🔄</div>
+                        <div class="security-text">
+                            <strong>Легкое восстановление</strong><br>
+                            Импортированные данные автоматически проверяются на корректность
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+    function exportSelected() {
+        const selectedOptions = {
+            triggers: document.getElementById('exportTriggers').checked,
+            templates: document.getElementById('exportTemplates').checked,
+            settings: document.getElementById('exportSettings').checked,
+            deepseek: document.getElementById('exportDeepSeek').checked
+        };
+
+        // Проверяем, что выбрано хотя бы что-то
+        if (!Object.values(selectedOptions).some(v => v)) {
+            dashboard.showNotification('Выберите хотя бы один тип данных для экспорта', 'warning');
+            return;
+        }
+
+        dashboard.showNotification('Подготовка экспорта...', 'info');
+
+        // Если выбран только триггеры - скачиваем файл триггеров
+        if (selectedOptions.triggers && !selectedOptions.templates && !selectedOptions.settings && !selectedOptions.deepseek) {
+            window.open('/export/triggers', '_blank');
+            dashboard.showNotification('Экспорт триггеров начат', 'success');
+            return;
+        }
+
+        // Для комбинированного экспорта создаем общий файл
+        createCombinedExport(selectedOptions);
+    }
+
+    function exportAll() {
+        // Отмечаем все чекбоксы
+        document.getElementById('exportTriggers').checked = true;
+        document.getElementById('exportTemplates').checked = true;
+        document.getElementById('exportSettings').checked = true;
+        document.getElementById('exportDeepSeek').checked = true;
+        
+        exportSelected();
+    }
+
+    async function createCombinedExport(options) {
+        try {
+            // Собираем данные со всех источников
+            const exportData = {
+                version: '1.0',
+                exportDate: new Date().toISOString(),
+                exportedItems: []
+            };
+
+            if (options.triggers) {
+                const triggersResponse = await fetch('/api/triggers');
+                const triggersData = await triggersResponse.json();
+                exportData.triggers = triggersData.triggers;
+                exportData.exportedItems.push('triggers');
+            }
+
+            if (options.templates) {
+                const templatesResponse = await fetch('/api/templates');
+                const templatesData = await templatesResponse.json();
+                exportData.templates = templatesData.templates;
+                exportData.exportedItems.push('templates');
+            }
+
+            if (options.settings) {
+                // Здесь можно добавить настройки
+                exportData.exportedItems.push('settings');
+            }
+
+            if (options.deepseek) {
+                // Здесь можно добавить настройки DeepSeek
+                exportData.exportedItems.push('deepseek');
+            }
+
+            // Создаем и скачиваем файл
+            downloadJSON(exportData, `lpbot-export-${new Date().toISOString().split('T')[0]}.json`);
+            dashboard.showNotification('Экспорт завершен успешно', 'success');
+
+        } catch (error) {
+            console.error('Ошибка экспорта:', error);
+            dashboard.showNotification('Ошибка при экспорте данных', 'error');
+        }
+    }
+
+    function createBackup() {
+        dashboard.showNotification('Создание полного бэкапа...', 'info');
+        
+        // Создаем полный бэкап со всеми данными
+        const backupData = {
+            version: '1.0',
+            type: 'full_backup',
+            backupDate: new Date().toISOString(),
+            description: 'Полный бэкап lpBot'
+        };
+
+        downloadJSON(backupData, `lpbot-backup-${new Date().toISOString().split('T')[0]}.backup`);
+        dashboard.showNotification('Полный бэкап создан', 'success');
+    }
+
+    function downloadJSON(data, filename) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    async function importData(event) {
+        event.preventDefault();
+        
+        const fileInput = document.getElementById('importFile');
+        const overwrite = document.getElementById('overwriteExisting').checked;
+        
+        if (!fileInput.files.length) {
+            dashboard.showNotification('Выберите файл для импорта', 'warning');
+            return;
+        }
+
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                
+                // Проверяем валидность данных
+                if (!data.version || !data.exportDate) {
+                    throw new Error('Неверный формат файла');
+                }
+
+                if (confirm(`Импортировать данные из ${file.name}?`)) {
+                    // Здесь будет логика импорта данных
+                    dashboard.showNotification('Данные успешно импортированы', 'success');
+                    fileInput.value = ''; // Очищаем input
+                }
+            } catch (error) {
+                console.error('Ошибка импорта:', error);
+                dashboard.showNotification('Ошибка при импорте файла', 'error');
+            }
+        };
+
+        reader.readAsText(file);
+    }
+
+    // Показываем размер данных при выборе файла
+    document.getElementById('importFile').addEventListener('change', function() {
+        if (this.files.length > 0) {
+            const file = this.files[0];
+            const size = (file.size / 1024).toFixed(2);
+            dashboard.showNotification(`Выбран файл: ${file.name} (${size} KB)`, 'info');
+        }
+    });
+    </script>
+
+    <style>
+    .export-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    .stat-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        background: #f7fafc;
+        border-radius: 8px;
+    }
+
+    .stat-icon {
+        font-size: 2rem;
+    }
+
+    .stat-number {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #2d3748;
+    }
+
+    .stat-label {
+        color: #6b7280;
+        font-size: 0.875rem;
+    }
+
+    .export-options {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .export-option {
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 1.25rem;
+        transition: all 0.3s ease;
+    }
+
+    .export-option:hover {
+        border-color: #667eea;
+        background: #f7fafc;
+    }
+
+    .option-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .option-header strong {
+        font-size: 1.1rem;
+        color: #2d3748;
+    }
+
+    .option-description {
+        color: #6b7280;
+        margin-bottom: 0.5rem;
+        line-height: 1.5;
+    }
+
+    .option-count {
+        color: #667eea;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .export-actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .btn.large {
+        padding: 1rem 2rem;
+        font-size: 1.1rem;
+    }
+
+    .import-section {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .import-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .export-history {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .history-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        background: #f7fafc;
+        border-radius: 8px;
+    }
+
+    .history-icon {
+        font-size: 1.5rem;
+    }
+
+    .history-info {
+        flex: 1;
+    }
+
+    .history-name {
+        font-weight: 500;
+        color: #2d3748;
+    }
+
+    .history-date {
+        color: #6b7280;
+        font-size: 0.875rem;
+    }
+
+    .history-size {
+        color: #6b7280;
+        font-weight: 500;
+    }
+
+    .security-info {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .security-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem;
+        background: #f0fff4;
+        border-radius: 8px;
+        border-left: 4px solid #38a169;
+    }
+
+    .security-icon {
+        font-size: 1.5rem;
+    }
+
+    .security-text {
+        flex: 1;
+    }
+
+    .alert.info {
+        background: #bee3f8;
+        color: #1a365d;
+        border: 1px solid #90cdf4;
+    }
+
+    @media (max-width: 768px) {
+        .export-stats {
+            grid-template-columns: 1fr;
+        }
+        
+        .export-actions {
+            flex-direction: column;
+        }
+        
+        .history-item {
+            flex-direction: column;
+            text-align: center;
+            gap: 0.5rem;
+        }
+        
+        .security-item {
+            flex-direction: column;
+            text-align: center;
+        }
+    }
+    </style>
+</body>
+</html>

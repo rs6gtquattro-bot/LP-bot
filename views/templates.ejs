@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Шаблоны - lpBot</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📁 Управление шаблонами</h1>
+            <div class="status">
+                <span class="status-indicator connected"></span>
+                <span>Бот активен</span>
+            </div>
+        </header>
+
+        <nav class="sidebar">
+            <ul>
+                <li><a href="/">📊 Главная</a></li>
+                <li><a href="/settings">⚙️ Настройки</a></li>
+                <li><a href="/triggers">🔔 Триггеры</a></li>
+                <li><a href="/templates" class="active">📁 Шаблоны</a></li>
+                <li><a href="/commands">🎯 Команды</a></li>
+                <li><a href="/deepseek">🤖 DeepSeek</a></li>
+                <li><a href="/logs">📋 Логи</a></li>
+                <li><a href="/stats">📈 Статистика</a></li>
+                <li><a href="/export">💾 Экспорт</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <div class="card">
+                <h3>💡 Информация о шаблонах</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Всего шаблонов:</span>
+                        <span class="info-value"><%= total %></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Текстовые:</span>
+                        <span class="info-value" id="textTemplates">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Медиа:</span>
+                        <span class="info-value" id="mediaTemplates">-</span>
+                    </div>
+                </div>
+                
+                <div class="alert info">
+                    💡 <strong>Как использовать:</strong><br>
+                    1. Отправьте сообщение с текстом/медиа в Telegram<br>
+                    2. Ответьте на него командой: <code><%= bot.settings.prefix %>шаб + название_шаблона</code><br>
+                    3. Используйте: <code><%= bot.settings.prefix %>шаб название_шаблона</code>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📋 Список шаблонов</h3>
+                <div class="table">
+                    <div class="table-header">
+                        <div class="table-row">
+                            <div style="flex: 2;">Название</div>
+                            <div style="flex: 2;">Тип</div>
+                            <div style="flex: 1;">Использований</div>
+                            <div style="flex: 2;">Последнее использование</div>
+                            <div style="flex: 1;">Действия</div>
+                        </div>
+                    </div>
+                    <div id="templatesContainer">
+                        <% if (templates.length === 0) { %>
+                            <div class="table-row">
+                                <div colspan="5" style="text-align: center; padding: 2rem; color: #6b7280;">
+                                    📭 Шаблоны не найдены
+                                </div>
+                            </div>
+                        <% } else { %>
+                            <% templates.forEach(template => { %>
+                                <div class="table-row">
+                                    <div style="flex: 2;"><strong><%= template.name %></strong></div>
+                                    <div style="flex: 2;">
+                                        <span class="template-type <%= template.content_type %>">
+                                            <%= getTemplateTypeIcon(template.content_type) %> <%= getTemplateTypeName(template.content_type) %>
+                                        </span>
+                                    </div>
+                                    <div style="flex: 1;"><%= template.used_count || 0 %></div>
+                                    <div style="flex: 2;">
+                                        <%= template.last_used ? new Date(template.last_used).toLocaleString('ru-RU') : 'Никогда' %>
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <button onclick="useTemplate('<%= template.name %>')" class="btn primary small">Использовать</button>
+                                        <button onclick="deleteTemplate('<%= template.name %>')" class="btn danger small">Удалить</button>
+                                    </div>
+                                </div>
+                            <% }); %>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🔍 Информация о шаблоне</h3>
+                <form onsubmit="getTemplateInfo(event)">
+                    <div class="form-group">
+                        <label for="templateName">Название шаблона:</label>
+                        <div class="input-group">
+                            <input type="text" id="templateName" class="form-control" placeholder="Введите название шаблона">
+                            <button type="submit" class="btn primary">Получить информацию</button>
+                        </div>
+                    </div>
+                </form>
+                <div id="templateInfo" style="display: none;">
+                    <!-- Информация будет загружена здесь -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+    function getTemplateTypeIcon(type) {
+        const icons = {
+            'text': '📝',
+            'photo': '🖼️',
+            'video': '🎥',
+            'voice': '🎤',
+            'video_note': '⭕',
+            'document': '📎',
+            'sticker': '🩷',
+            'media': '📁'
+        };
+        return icons[type] || '📄';
+    }
+
+    function getTemplateTypeName(type) {
+        const names = {
+            'text': 'Текст',
+            'photo': 'Фото',
+            'video': 'Видео',
+            'voice': 'Голосовое',
+            'video_note': 'Кружок',
+            'document': 'Документ',
+            'sticker': 'Стикер',
+            'media': 'Медиа'
+        };
+        return names[type] || type;
+    }
+
+    async function useTemplate(name) {
+        dashboard.showNotification(`Использование шаблона: ${name}`, 'info');
+        // В реальном приложении здесь будет вызов API
+    }
+
+    async function deleteTemplate(name) {
+        if (!confirm(`Удалить шаблон "${name}"?`)) return;
+        
+        try {
+            // Здесь будет вызов API для удаления шаблона
+            dashboard.showNotification(`Шаблон "${name}" удален`, 'success');
+            // Перезагружаем список
+            setTimeout(() => location.reload(), 1000);
+        } catch (error) {
+            dashboard.showNotification('Ошибка удаления шаблона', 'error');
+        }
+    }
+
+    async function getTemplateInfo(event) {
+        event.preventDefault();
+        const name = document.getElementById('templateName').value;
+        if (!name) return;
+
+        try {
+            const response = await fetch(`/api/templates`);
+            const data = await response.json();
+            const template = data.templates.find(t => t.name === name);
+            
+            const infoContainer = document.getElementById('templateInfo');
+            if (template) {
+                infoContainer.innerHTML = `
+                    <div class="template-details">
+                        <h4>📋 Информация о шаблоне "${template.name}"</h4>
+                        <div class="details-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Тип:</span>
+                                <span class="detail-value">${getTemplateTypeIcon(template.content_type)} ${getTemplateTypeName(template.content_type)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Использован:</span>
+                                <span class="detail-value">${template.used_count || 0} раз</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Последнее использование:</span>
+                                <span class="detail-value">${template.last_used ? new Date(template.last_used).toLocaleString('ru-RU') : 'Никогда'}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                infoContainer.style.display = 'block';
+            } else {
+                dashboard.showNotification('Шаблон не найден', 'error');
+            }
+        } catch (error) {
+            dashboard.showNotification('Ошибка получения информации', 'error');
+        }
+    }
+
+    // Статистика по типам шаблонов
+    document.addEventListener('DOMContentLoaded', () => {
+        const templates = <%= JSON.stringify(templates) %>;
+        const textCount = templates.filter(t => t.content_type === 'text').length;
+        const mediaCount = templates.filter(t => t.content_type !== 'text').length;
+        
+        document.getElementById('textTemplates').textContent = textCount;
+        document.getElementById('mediaTemplates').textContent = mediaCount;
+    });
+    </script>
+
+    <style>
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .info-item {
+        background: #f7fafc;
+        padding: 1rem;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .info-label {
+        display: block;
+        font-size: 0.875rem;
+        color: #6b7280;
+        margin-bottom: 0.25rem;
+    }
+
+    .info-value {
+        display: block;
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #2d3748;
+    }
+
+    .template-type {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .template-type.text { background: #e6fffa; color: #234e52; }
+    .template-type.photo { background: #fed7d7; color: #742a2a; }
+    .template-type.video { background: #e9d8fd; color: #44337a; }
+    .template-type.voice { background: #c6f6d5; color: #22543d; }
+    .template-type.video_note { background: #bee3f8; color: #1a365d; }
+    .template-type.document { background: #faf089; color: #744210; }
+    .template-type.sticker { background: #fbb6ce; color: #702459; }
+
+    .input-group {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .input-group .form-control {
+        flex: 1;
+    }
+
+    .btn.small {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+    }
+
+    .template-details {
+        background: #f7fafc;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-top: 1rem;
+    }
+
+    .details-grid {
+        display: grid;
+        gap: 0.5rem;
+    }
+
+    .detail-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .detail-item:last-child {
+        border-bottom: none;
+    }
+
+    .detail-label {
+        font-weight: 500;
+        color: #4a5568;
+    }
+
+    .detail-value {
+        color: #2d3748;
+        font-weight: 600;
+    }
+
+    .alert.info {
+        background: #bee3f8;
+        color: #1a365d;
+        border: 1px solid #90cdf4;
+    }
+    </style>
+</body>
+</html>

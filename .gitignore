@@ -1,0 +1,9 @@
+node_modules/
+congif.json
+config.json
+session.txt
+*.session
+.env
+*.sqlite
+dist/
+*.zip

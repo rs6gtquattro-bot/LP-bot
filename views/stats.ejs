@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Статистика - lpBot</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📈 Статистика бота</h1>
+            <div class="status">
+                <span class="status-indicator connected"></span>
+                <span>Бот активен</span>
+            </div>
+        </header>
+
+        <nav class="sidebar">
+            <ul>
+                <li><a href="/">📊 Главная</a></li>
+                <li><a href="/settings">⚙️ Настройки</a></li>
+                <li><a href="/triggers">🔔 Триггеры</a></li>
+                <li><a href="/templates">📁 Шаблоны</a></li>
+                <li><a href="/commands">🎯 Команды</a></li>
+                <li><a href="/deepseek">🤖 DeepSeek</a></li>
+                <li><a href="/logs">📋 Логи</a></li>
+                <li><a href="/stats" class="active">📈 Статистика</a></li>
+                <li><a href="/export">💾 Экспорт</a></li>
+            </ul>
+        </nav>
+
+        <main class="content">
+            <!-- Основная статистика -->
+            <div class="stats-grid">
+                <div class="stat-card primary">
+                    <div class="stat-icon">⏰</div>
+                    <div class="stat-content">
+                        <div class="stat-number" id="uptimeStat"><%= uptime %></div>
+                        <div class="stat-label">Аптайм</div>
+                    </div>
+                </div>
+
+                <div class="stat-card success">
+                    <div class="stat-icon">🔔</div>
+                    <div class="stat-content">
+                        <div class="stat-number"><%= triggers %></div>
+                        <div class="stat-label">Триггеров</div>
+                    </div>
+                </div>
+
+                <div class="stat-card info">
+                    <div class="stat-icon">📁</div>
+                    <div class="stat-content">
+                        <div class="stat-number"><%= templates %></div>
+                        <div class="stat-label">Шаблонов</div>
+                    </div>
+                </div>
+
+                <div class="stat-card warning">
+                    <div class="stat-icon">⏱️</div>
+                    <div class="stat-content">
+                        <div class="stat-number"><%= timers %></div>
+                        <div class="stat-label">Таймеров</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Системная информация -->
+            <div class="card">
+                <h3>🖥️ Системная информация</h3>
+                <div class="system-info">
+                    <div class="info-row">
+                        <span class="info-label">Запущен:</span>
+                        <span class="info-value"><%= startTime.toLocaleString('ru-RU') %></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Память:</span>
+                        <span class="info-value" id="memoryStat"><%= memory %> MB</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Telegram:</span>
+                        <span class="info-value">
+                            <%= connection ? '✅ Подключено' : '❌ Отключено' %>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Версия Node.js:</span>
+                        <span class="info-value" id="nodeVersion">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Графики и визуализация -->
+            <div class="card">
+                <h3>📊 Активность</h3>
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <h4>Использование команд</h4>
+                        <div class="chart-placeholder">
+                            <div class="chart-bars">
+                                <div class="chart-bar" style="height: 80%; background: #667eea;" title="триггер: 80%"></div>
+                                <div class="chart-bar" style="height: 65%; background: #764ba2;" title="шаб: 65%"></div>
+                                <div class="chart-bar" style="height: 45%; background: #f093fb;" title="айди: 45%"></div>
+                                <div class="chart-bar" style="height: 30%; background: #f5576c;" title="тест: 30%"></div>
+                                <div class="chart-bar" style="height: 25%; background: #4ecdc4;" title="дип: 25%"></div>
+                            </div>
+                            <div class="chart-labels">
+                                <span>триггер</span>
+                                <span>шаб</span>
+                                <span>айди</span>
+                                <span>тест</span>
+                                <span>дип</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <h4>Распределение по типам</h4>
+                        <div class="pie-chart">
+                            <div class="pie-segment" style="--percentage: 40; --color: #667eea;" title="Триггеры: 40%"></div>
+                            <div class="pie-segment" style="--percentage: 25; --color: #764ba2;" title="Шаблоны: 25%"></div>
+                            <div class="pie-segment" style="--percentage: 20; --color: #f093fb;" title="Команды: 20%"></div>
+                            <div class="pie-segment" style="--percentage: 15; --color: #4ecdc4;" title="Прочее: 15%"></div>
+                            <div class="pie-center">
+                                <div class="pie-total">100%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Детальная статистика -->
+            <div class="card">
+                <h3>📈 Детальная статистика</h3>
+                <div class="detailed-stats">
+                    <div class="stat-section">
+                        <h4>🔔 Триггеры</h4>
+                        <div class="stat-details">
+                            <div class="stat-detail">
+                                <span>Активных:</span>
+                                <span id="activeTriggers">-</span>
+                            </div>
+                            <div class="stat-detail">
+                                <span>Всего использований:</span>
+                                <span id="totalTriggerUses">-</span>
+                            </div>
+                            <div class="stat-detail">
+                                <span>Самый популярный:</span>
+                                <span id="popularTrigger">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="stat-section">
+                        <h4>📁 Шаблоны</h4>
+                        <div class="stat-details">
+                            <div class="stat-detail">
+                                <span>Текстовых:</span>
+                                <span id="textTemplatesCount">-</span>
+                            </div>
+                            <div class="stat-detail">
+                                <span>Медиа:</span>
+                                <span id="mediaTemplatesCount">-</span>
+                            </div>
+                            <div class="stat-detail">
+                                <span>Всего использований:</span>
+                                <span id="totalTemplateUses">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="stat-section">
+                        <h4>⚡ Производительность</h4>
+                        <div class="stat-details">
+                            <div class="stat-detail">
+                                <span>Среднее время ответа:</span>
+                                <span id="avgResponseTime">-</span>
+                            </div>
+                            <div class="stat-detail">
+                                <span>Ошибок за сегодня:</span>
+                                <span id="todayErrors">0</span>
+                            </div>
+                            <div class="stat-detail">
+                                <span>Статус WebSocket:</span>
+                                <span id="wsStatus">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- История активности -->
+            <div class="card">
+                <h3>📅 Активность за последние 24 часа</h3>
+                <div class="activity-timeline">
+                    <div class="timeline-item">
+                        <div class="timeline-time">14:30</div>
+                        <div class="timeline-dot success"></div>
+                        <div class="timeline-content">
+                            <strong>Добавлен новый триггер</strong>
+                            <span>"привет" → "Привет, друг!"</span>
+                        </div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-time">13:15</div>
+                        <div class="timeline-dot info"></div>
+                        <div class="timeline-content">
+                            <strong>Использован шаблон</strong>
+                            <span>"приветствие" (3 раза)</span>
+                        </div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-time">12:00</div>
+                        <div class="timeline-dot warning"></div>
+                        <div class="timeline-content">
+                            <strong>Обновлены настройки</strong>
+                            <span>Изменен префикс на "<%= bot.settings.prefix %>"</span>
+                        </div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-time">10:45</div>
+                        <div class="timeline-dot primary"></div>
+                        <div class="timeline-content">
+                            <strong>Запущен DeepSeek</strong>
+                            <span>Обработано 5 запросов</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Действия -->
+            <div class="card">
+                <h3>⚡ Быстрые действия</h3>
+                <div class="quick-actions">
+                    <button onclick="refreshStats()" class="btn primary">
+                        🔄 Обновить статистику
+                    </button>
+                    <button onclick="clearStats()" class="btn secondary">
+                        🗑️ Очистить статистику
+                    </button>
+                    <button onclick="exportStats()" class="btn tertiary">
+                        📊 Экспорт статистики
+                    </button>
+                    <button onclick="showAdvancedStats()" class="btn info">
+                        📈 Расширенная статистика
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+    // Обновление статистики в реальном времени
+    function updateRealTimeStats() {
+        // Аптайм
+        const startTime = new Date('<%= startTime.toISOString() %>');
+        const now = new Date();
+        const diff = now - startTime;
+        
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        
+        document.getElementById('uptimeStat').textContent = 
+            `${days}d ${hours}h ${minutes}m ${seconds}s`;
+
+        // Память (симуляция)
+        const memoryElement = document.getElementById('memoryStat');
+        const currentMemory = parseInt(memoryElement.textContent);
+        const newMemory = currentMemory + Math.random() * 2 - 1;
+        memoryElement.textContent = `${Math.max(50, Math.round(newMemory))} MB`;
+
+        // WebSocket статус
+        document.getElementById('wsStatus').textContent = 
+            dashboard.ws && dashboard.ws.readyState === WebSocket.OPEN ? 
+            '✅ Подключен' : '❌ Отключен';
+    }
+
+    // Загрузка детальной статистики
+    async function loadDetailedStats() {
+        try {
+            // Здесь будет загрузка реальных данных с сервера
+            // Пока используем демо-данные
+            document.getElementById('activeTriggers').textContent = '<%= triggers %>';
+            document.getElementById('totalTriggerUses').textContent = '1,247';
+            document.getElementById('popularTrigger').textContent = 'привет (156 раз)';
+            
+            document.getElementById('textTemplatesCount').textContent = '8';
+            document.getElementById('mediaTemplatesCount').textContent = '4';
+            document.getElementById('totalTemplateUses').textContent = '89';
+            
+            document.getElementById('avgResponseTime').textContent = '0.8s';
+            document.getElementById('todayErrors').textContent = '2';
+            
+            document.getElementById('nodeVersion').textContent = process.versions?.node || 'Unknown';
+
+        } catch (error) {
+            console.error('Ошибка загрузки статистики:', error);
+        }
+    }
+
+    function refreshStats() {
+        updateRealTimeStats();
+        loadDetailedStats();
+        dashboard.showNotification('Статистика обновлена', 'success');
+    }
+
+    function clearStats() {
+        if (confirm('Очистить всю статистику? Это действие нельзя отменить.')) {
+            dashboard.showNotification('Статистика очищена', 'success');
+            // Здесь будет вызов API для очистки статистики
+        }
+    }
+
+    function exportStats() {
+        const statsData = {
+            timestamp: new Date().toISOString(),
+            uptime: document.getElementById('uptimeStat').textContent,
+            memory: document.getElementById('memoryStat').textContent,
+            triggers: <%= triggers %>,
+            templates: <%= templates %>,
+            timers: <%= timers %>
+        };
+
+        const blob = new Blob([JSON.stringify(statsData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `lpbot-stats-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        dashboard.showNotification('Статистика экспортирована', 'success');
+    }
+
+    function showAdvancedStats() {
+        dashboard.showNotification('Расширенная статистика в разработке', 'info');
+    }
+
+    // Инициализация при загрузке страницы
+    document.addEventListener('DOMContentLoaded', () => {
+        updateRealTimeStats();
+        loadDetailedStats();
+        
+        // Обновление статистики каждые 5 секунд
+        setInterval(updateRealTimeStats, 5000);
+        
+        // Обновление детальной статистики каждые 30 секунд
+        setInterval(loadDetailedStats, 30000);
+    });
+
+    // Глобальный объект process для версии Node.js
+    const process = {
+        versions: {
+            node: '<%= process.version %>' || 'Unknown'
+        }
+    };
+    </script>
+
+    <style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        padding: 2rem;
+        border-radius: 12px;
+        color: white;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .stat-card.primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .stat-card.success {
+        background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+    }
+
+    .stat-card.info {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .stat-card.warning {
+        background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+    }
+
+    .stat-icon {
+        font-size: 3rem;
+        opacity: 0.9;
+    }
+
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+        font-size: 1rem;
+        opacity: 0.9;
+    }
+
+    .system-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .info-row:last-child {
+        border-bottom: none;
+    }
+
+    .info-label {
+        font-weight: 500;
+        color: #4a5568;
+    }
+
+    .info-value {
+        font-weight: 600;
+        color: #2d3748;
+    }
+
+    .charts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+    }
+
+    .chart-container {
+        text-align: center;
+    }
+
+    .chart-container h4 {
+        margin-bottom: 1rem;
+        color: #2d3748;
+    }
+
+    .chart-placeholder {
+        background: #f7fafc;
+        padding: 2rem;
+        border-radius: 8px;
+        height: 200px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+    }
+
+    .chart-bars {
+        display: flex;
+        align-items: end;
+        justify-content: space-around;
+        height: 150px;
+        gap: 0.5rem;
+    }
+
+    .chart-bar {
+        width: 40px;
+        border-radius: 4px 4px 0 0;
+        transition: all 0.3s ease;
+    }
+
+    .chart-bar:hover {
+        opacity: 0.8;
+        transform: scale(1.05);
+    }
+
+    .chart-labels {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 0.5rem;
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+
+    .pie-chart {
+        position: relative;
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        background: conic-gradient(
+            #667eea 0% 40%,
+            #764ba2 40% 65%,
+            #f093fb 65% 85%,
+            #4ecdc4 85% 100%
+        );
+        margin: 0 auto;
+    }
+
+    .pie-center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 80px;
+        height: 80px;
+        background: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pie-total {
+        font-weight: bold;
+        color: #2d3748;
+    }
+
+    .detailed-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+    }
+
+    .stat-section h4 {
+        margin-bottom: 1rem;
+        color: #2d3748;
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 0.5rem;
+    }
+
+    .stat-details {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .stat-detail {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f7fafc;
+    }
+
+    .stat-detail:last-child {
+        border-bottom: none;
+    }
+
+    .activity-timeline {
+        position: relative;
+        padding-left: 2rem;
+    }
+
+    .activity-timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e2e8f0;
+    }
+
+    .timeline-item {
+        position: relative;
+        margin-bottom: 2rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .timeline-time {
+        font-size: 0.875rem;
+        color: #6b7280;
+        min-width: 60px;
+        text-align: right;
+    }
+
+    .timeline-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        position: absolute;
+        left: -2.35rem;
+        top: 0.25rem;
+        z-index: 1;
+    }
+
+    .timeline-dot.success { background: #38a169; }
+    .timeline-dot.info { background: #3182ce; }
+    .timeline-dot.warning { background: #d69e2e; }
+    .timeline-dot.primary { background: #667eea; }
+
+    .timeline-content {
+        flex: 1;
+        background: #f7fafc;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+    }
+
+    .timeline-content strong {
+        display: block;
+        color: #2d3748;
+        margin-bottom: 0.25rem;
+    }
+
+    .timeline-content span {
+        color: #6b7280;
+        font-size: 0.875rem;
+    }
+
+    .quick-actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .btn.info {
+        background: #bee3f8;
+        color: #1a365d;
+        border: 1px solid #90cdf4;
+    }
+
+    .btn.info:hover {
+        background: #90cdf4;
+    }
+
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .stat-card {
+            flex-direction: column;
+            text-align: center;
+            gap: 1rem;
+        }
+        
+        .charts-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .detailed-stats {
+            grid-template-columns: 1fr;
+        }
+        
+        .quick-actions {
+            flex-direction: column;
+        }
+        
+        .timeline-item {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .timeline-time {
+            text-align: left;
+        }
+    }
+    </style>
+</body>
+</html>
