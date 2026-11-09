@@ -5037,8 +5037,46 @@ checkTriggerConditions(trigger, userId, chatId) {
         settings.excludedUsers.includes(userId.toString())) {
         return false;
     }
+
+    // чек времени (-time_start / -time_end, формат ЧЧ:ММ)
+    if (settings.timeStart && settings.timeEnd) {
+        const startTime = this.parseClock(settings.timeStart);
+        const endTime = this.parseClock(settings.timeEnd);
+        if (startTime !== null && endTime !== null) {
+            const now = new Date();
+            const currentTime = now.getHours() * 60 + now.getMinutes();
+            if (startTime > endTime) {
+                // Окно переходит через полночь
+                if (!(currentTime >= startTime || currentTime <= endTime)) {
+                    return false;
+                }
+            } else if (!(currentTime >= startTime && currentTime <= endTime)) {
+                return false;
+            }
+        }
+    }
+
+    // чек дней недели (-days, 1-пн ... 7-вс)
+    if (Array.isArray(settings.days) && settings.days.length > 0) {
+        const currentDay = new Date().getDay(); // 0-воскресенье, 1-понедельник...
+        const adjustedDay = currentDay === 0 ? 7 : currentDay;
+        if (!settings.days.map(Number).includes(adjustedDay)) {
+            return false;
+        }
+    }
     
     return true;
+}
+
+// Время суток "ЧЧ:ММ" -> минуты от полуночи (0..1439); null, если формат неверный.
+// Не путать с parseTime: тот считает длительность в секундах для таймеров.
+parseClock(timeStr) {
+    const match = /^\s*(\d{1,2}):(\d{2})\s*$/.exec(String(timeStr ?? ''));
+    if (!match) return null;
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (hours > 23 || minutes > 59) return null;
+    return hours * 60 + minutes;
 }
 
 async getChatType(chatId) {
