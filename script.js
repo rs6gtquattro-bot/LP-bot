@@ -1108,6 +1108,27 @@ startKeepAlive() {
     }, 120000); // Увеличиваем интервал до 2 минут
 }
 
+    // ДОПУЩЕНИЕ: исходный optimizedAuth не сохранился ни в одной версии (ПК, favorite, выгрузка VK-чата).
+    // Восстановлен по образцу botsTG/lp/script.js: вход через client.start у GramJS с вводом в консоли.
+    async optimizedAuth() {
+    console.log('🔑 Авторизация по номеру телефона...');
+    await this.telegramClient.start({
+        phoneNumber: async () => await input.text('📱 Номер телефона (в формате +7...): '),
+        password: async () => await input.password('🔒 Пароль облачный 2FA (если нет — Enter): '),
+        phoneCode: async () => await input.text('💬 Код из Telegram: '),
+        onError: (err) => console.error('❌ Ошибка авторизации:', err.message),
+    });
+
+    console.log('✅ Авторизация успешна!');
+    this.sessionString = this.telegramClient.session.save();
+    this.saveSession(this.sessionString);
+
+    this.botInfo = await this.telegramClient.getMe();
+    console.log(`🤖 Авторизованы как: @${this.botInfo.username || this.botInfo.firstName}`);
+
+    await this.completeInitialization();
+}
+
     async startQRCodeAuth() {
     try {
         console.log('📱 Запуск авторизации по QR-коду...');
