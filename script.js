@@ -652,6 +652,7 @@ async saveTimersToDatabase() {
             
             // Загружаем основные настройки
             this.settings.prefix = settingsData.prefix || '!';
+            if (this.vkClient) this.vkClient.setPrefix(this.settings.prefix);
             this.settings.notifications = settingsData.notifications !== undefined ? settingsData.notifications : true;
             this.settings.autoStatus = settingsData.autoStatus || false;
             this.settings.autoStatusSettings = settingsData.autoStatusSettings || { mode: 1, interval: 60 };
@@ -2204,6 +2205,7 @@ async startWebInterface() {
         const newPrefix = args[0];
         this.settings.prefix = newPrefix;
         this.saveSettings();
+        if (this.vkClient) this.vkClient.setPrefix(newPrefix); // VK-команды на том же префиксе
         
         await this.editMessage(chatId, messageId, `✅ Префикс изменен на: ${newPrefix}`);
     }
@@ -7364,7 +7366,7 @@ bot.panelHost = appConfig.panelHost || '127.0.0.1';
 
 // VK-клиент стартует сразу и не ждёт авторизации TG (ТЗ п. 3.4). Без токена пишет одну строку в лог и не запускается.
 const VkClient = require('./vk_client.js');
-bot.vkClient = new VkClient(bot, appConfig.vk || {});
+bot.vkClient = new VkClient(bot, VkClient.configFor(bot, appConfig.vk || {})); // префикс VK = settings.prefix
 bot.vkClient.start().catch((error) => console.error('❌ VK: ошибка запуска:', error.message));
 bot.start().catch(console.error);
 

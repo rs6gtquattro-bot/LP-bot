@@ -112,6 +112,8 @@ gui\start_gui.bat
 
 Файловые команды `*код …` (TG) и `код показать` (VK) не читают, не меняют и не восстанавливают секретные файлы: `session.txt`, `*.session`, `config.json`, `settings.json`, `.env`, `.env.*`, `*.sqlite` (и `-journal`, `-wal`, `-shm`), короткие имена Windows вида `SESSIO~1.TXT`, папку `.git` и бэкапы этих файлов в `backups/`. Регистр букв не важен. Список задан в `secret_files.js`.
 
+VK-команды работают на том же префиксе, что и TG: `settings.prefix` передаётся в VK-клиент при запуске, при смене префикса и при перечитывании `settings.json`. Счётчик событий long poll — в логе (`📥 VK LP: событий N`, первое и каждое сотое) и в `/api/stats` (`vkEvents`, `vkConnected`), без текста сообщений.
+
 ### VK через ПК владельца (`tools/vk_tunnel.py`)
 
 Токен VK привязан к IP владельца, поэтому VK-трафик бота идёт через SSH-туннель до его ПК:
@@ -128,7 +130,7 @@ gui\start_gui.bat
 Все тесты, кроме `panel_host`, идут на заглушках и обязаны запускаться без сети, под `unshare -rn`. В каждом из них первой строкой стоит проверка `tests/_no_network.js`: если у машины есть сетевой интерфейс кроме петли, тест сразу пишет `FAIL сеть доступна` и завершается с кодом 1. Обхода у этой проверки нет.
 
 ```sh
-for t in auth trigger-time vk_client vk_commands tg_ws startup_log secret_files vk_proxy_failclosed; do unshare -rn node tests/$t.test.js; done
+for t in auth trigger-time vk_client vk_commands tg_ws startup_log secret_files vk_proxy_failclosed vk_prefix; do unshare -rn node tests/$t.test.js; done
 node tests/panel_host.test.js
 ```
 
