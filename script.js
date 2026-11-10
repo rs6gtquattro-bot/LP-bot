@@ -29,6 +29,7 @@
 const { TelegramClient } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const { useWebTelegramDCs, webClientParams } = require('./tg_web_dc.js'); // TG только через *.web.telegram.org
+const { resolveBotPath, resolveRestore } = require('./secret_files.js'); // файловые команды не трогают секретные файлы
 const { NewMessage } = require('telegram/events');
 const sqlite3 = require('sqlite3').verbose();
 const input = require('input');
@@ -6336,17 +6337,13 @@ async restoreBackup(args, chatId, messageId) {
     }
 
     const backupName = args[0];
-    const backupDir = path.join(__dirname, 'backups');
-    const backupPath = path.join(backupDir, backupName);
+    // Имя без пути; поверх секретных файлов не восстанавливаем (secret_files.js)
+    const { backupPath, originalName, originalPath } = resolveRestore(__dirname, backupName);
     
     if (!fs.existsSync(backupPath)) {
         throw new Error('Бэкап не найден');
     }
 
-    // Определяем оригинальное имя файла из имени бэкапа
-    const originalName = backupName.replace(/_\d+\.backup$/, '');
-    const originalPath = path.join(__dirname, originalName);
-    
     // Копируем бэкап на место оригинального файла
     fs.copyFileSync(backupPath, originalPath);
     
@@ -6376,27 +6373,8 @@ async restartBot(chatId, messageId) {
 // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
 
 validateFilePath(userPath) {
-    // Запрещаем переходы по директориям
-    if (userPath.includes('..')) {
-        throw new Error('Недопустимый путь: переходы между директориями запрещены');
-    }
-    
-    // Разрешаем только определенные расширения
-    const allowedExt = ['.js', '.json', '.txt', '.md', '.html', '.css', ''];
-    const ext = path.extname(userPath);
-    if (!allowedExt.includes(ext)) {
-        throw new Error('Недопустимое расширение файла');
-    }
-    
-    // Строим полный путь
-    const fullPath = path.join(__dirname, userPath);
-    
-    // Проверяем что путь остается в директории бота
-    if (!fullPath.startsWith(__dirname)) {
-        throw new Error('Недопустимый путь: выход за пределы директории бота');
-    }
-    
-    return fullPath;
+    // Пути только внутри папки бота, без .., с разрешённым расширением; секретные файлы закрыты (secret_files.js)
+    return resolveBotPath(__dirname, userPath);
 }
 
 async validateJavaScript(code) {
