@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const WebInterface = require('../../web_interface.js');
 
@@ -16,11 +17,28 @@ module.exports = {
         const proc = core.get('process');
         const utils = core.get('utils');
 
-        const host = (core.options && core.options.panelHost) || process.env.PANEL_HOST || '127.0.0.1';
+        let configPanelPort = null;
+        let configPanelHost = null;
+        let configPanelToken = null;
+        try {
+            const configPath = (utils && utils.paths && utils.paths.CONFIG_PATH) || path.join(__dirname, '..', '..', 'config.json');
+            if (fs.existsSync(configPath)) {
+                const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                if (cfg) {
+                    if (cfg.panelPort !== undefined && cfg.panelPort !== null) configPanelPort = Number(cfg.panelPort);
+                    if (cfg.panelHost) configPanelHost = cfg.panelHost;
+                    if (cfg.panelToken) configPanelToken = cfg.panelToken;
+                }
+            }
+        } catch {
+            // ignore config read errors
+        }
+
+        const host = (core.options && core.options.panelHost) || process.env.PANEL_HOST || configPanelHost || '127.0.0.1';
         const port = (core.options && core.options.panelPort !== undefined)
-            ? core.options.panelPort
-            : (Number(process.env.PANEL_PORT) || 3000);
-        const token = (core.options && core.options.panelToken) || process.env.PANEL_TOKEN || null;
+            ? Number(core.options.panelPort)
+            : (Number(process.env.PANEL_PORT) || configPanelPort || 3005);
+        const token = (core.options && core.options.panelToken) || process.env.PANEL_TOKEN || configPanelToken || null;
 
         const botAdapter = {
             settings: {

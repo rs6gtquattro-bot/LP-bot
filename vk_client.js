@@ -412,8 +412,42 @@ class VkClient {
             await this.routeToTg(ctx, name.slice(3));
             return true;
         }
-        const cmd = this.commands.get(name);
+        // Алиасы-синонимы VK для полного паритета с TG
+        const VK_ALIASES = {
+            'help': 'хелп',
+            'команды': 'кмд',
+            'тест': 'пинг',
+            'дип': 'ор',
+            'инфо': 'о_чате',
+            'чат': 'о_чате',
+            'удалить': 'смс',
+            'пин': 'закреп',
+            'шаб': 'шаблон'
+        };
+
+        let cmd = this.commands.get(name);
+        if (!cmd && VK_ALIASES[name]) {
+            cmd = this.commands.get(VK_ALIASES[name]);
+        }
+
         if (!cmd) {
+            // Сквозной диспетчер: если в VK введена команда из модулей TG — исполняем через TG без вывода "Для TG команд пишите тг_"
+            const bot = this.bot || {};
+            const tgCommands = (bot.commands && typeof bot.commands === 'object') ? bot.commands : {};
+            const isTgCmd = Boolean(tgCommands[name] || (VK_ALIASES[name] && tgCommands[VK_ALIASES[name]]) || [
+                'уведы', 'автопуши', 'qr', 'чек_qr', 'проверить', 'прокси', 'кража_авы', 'перевод',
+                'рег', 'поиск', 'премиум', 'кастом', 'custom', 'по_приколу', 'сброс_прикола'
+            ].includes(name));
+
+            if (isTgCmd) {
+                if (level !== 'owner') {
+                    await ctx.reply(`⛔ Команды TG (${prefix}${rawName}) доступны только владельцу`);
+                    return true;
+                }
+                await this.routeToTg(ctx, name);
+                return true;
+            }
+
             await ctx.reply(`❌ Команда '${prefix}${rawName}' не найдена\nДля TG команд: ${prefix}тг_${rawName}`); // ТЗ п. 5.3
             return true;
         }
@@ -606,6 +640,7 @@ class VkClient {
 // Карточки (canvas) и модули гориллы в этот проход не входят (ТЗ п. 6).
 // =====================================================================
 const SECTIONS = ['БАЗОВЫЕ', 'СООБЩЕНИЯ', 'VK СПЕЦ.', 'ЗАЩИТА', 'LP LOGGER', 'ВЛАДЕЛЕЦ', 'AI / OPENROUTER'];
+const DIVIDER = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬';
 const PROTECTION = ['антимат', 'антиlink', 'антискрин', 'антифлуд', 'антибот', 'капча', 'антиспам'];
 const { isSecretPath } = require('./secret_files.js'); // общий список секретных файлов с TG-командами ‘код
 
@@ -654,20 +689,22 @@ function registerDefaultCommands(client) {
     const help = async (ctx, arg) => {
         const all = [...client.commands.entries()];
         const p = client.config.prefix;
-        const head = `LP Bot VK — ${all.length} команд, префикс ${p}`;
-        const bySection = (sec) => all.filter(([, c]) => c.section === sec).map(([, c]) => `• ${p}${c.usage}`);
+        const triggersCount = client.state.triggers ? client.state.triggers.length : 0;
+        const head = `LP Bot VK — ${all.length} команд, префикс ${p} 🤖\n${DIVIDER}\n📋 Префикс команд: ${p}\n🔢 Всего команд: ${all.length}\n🎯 Триггеров: ${triggersCount}\n${DIVIDER}`;
+        const bySection = (sec) => all.filter(([, c]) => c.section === sec).map(([, c]) => `   🔹 ${p}${c.usage}`);
         const a = String(arg || '').toLowerCase();
         if (!a) {
             const lines = SECTIONS.map((sec, i) => `${i + 1}. ${sec} (${bySection(sec).length})`);
-            return ctx.reply(`${head}\n\n${lines.join('\n')}\n\n${p}кмд [N] — раздел, ${p}кмд все — все команды, ${p}хелп [раздел]`);
+            return ctx.reply(`${head}\n\n${lines.join('\n')}\n\n${DIVIDER}\n💡 ${p}кмд [N] — раздел, ${p}кмд все — все команды, ${p}хелп [раздел]`);
         }
         if (a === 'все') {
-            return ctx.reply(`${head}\n\n${SECTIONS.map((sec) => `${sec}\n${bySection(sec).join('\n')}`).join('\n\n')}`);
+            const body = SECTIONS.map((sec) => `${sec}:\n${bySection(sec).join('\n')}`).join('\n\n');
+            return ctx.reply(`${head}\n\n${body}\n\n${DIVIDER}\n⚡ LP-BOT VK [Active] • Разработчик: @chovamnadoa`);
         }
         const n = Number(a);
         const sec = Number.isInteger(n) && n >= 1 ? SECTIONS[n - 1] : SECTIONS.find((s) => s.toLowerCase().startsWith(a));
         if (!sec) return ctx.reply(`❌ Раздел '${arg}' не найден. ${p}кмд — список разделов`);
-        return ctx.reply(`${sec}\n${bySection(sec).join('\n')}`);
+        return ctx.reply(`${sec}\n${DIVIDER}\n${bySection(sec).join('\n')}\n${DIVIDER}\n💡 Используй ${p}кмд для списка всех разделов`);
     };
     reg('кмд', 'БАЗОВЫЕ', 'кмд [N|все]', 1, (ctx) => help(ctx, ctx.args[0]));
     reg('хелп', 'БАЗОВЫЕ', 'хелп [раздел]', 1, (ctx) => help(ctx, ctx.rest));
@@ -685,7 +722,8 @@ function registerDefaultCommands(client) {
     reg('триггеры', 'БАЗОВЫЕ', 'триггеры', 1, async (ctx) => {
         const list = client.state.triggers;
         if (!list.length) return ctx.reply('📋 Триггеров нет');
-        return ctx.reply(`📋 Триггеры VK (${list.length}):\n${list.map((t) => `#${t.id} «${t.word}» → «${t.response}»`).join('\n')}`);
+        const items = list.map((t) => `• #${t.id} «${t.word}» → «${t.response}»`).join('\n');
+        return ctx.reply(`🎯 ТРИГГЕРЫ VK (${list.length}) 🎯\n${DIVIDER}\n${items}\n${DIVIDER}\n💡 Для удаления: ${client.config.prefix}дельтриггер ID`);
     });
     reg('дельтриггер', 'БАЗОВЫЕ', 'дельтриггер ID', 2, async (ctx) => {
         const id = Number(ctx.args[0]);
@@ -834,6 +872,25 @@ function registerDefaultCommands(client) {
     // ---------------- VK СПЕЦ. ----------------
     reg('о_чате', 'VK СПЕЦ.', 'о_чате', 1, async (ctx) => {
         const peer = ctx.msg.peerId;
+        if (ctx.name === 'инфо') {
+            let info = `💬 ИНФОРМАЦИЯ О ЧАТЕ 💬\n${DIVIDER}\n`;
+            if (peer > 2000000000) {
+                const r = await api('messages.getConversationsById', { peer_ids: peer });
+                const c = r.items && r.items[0];
+                const s = (c && c.chat_settings) || {};
+                info += `📝 Название: ${s.title || 'Беседа'}\n`;
+                info += `🆔 ID: ${peer}\n`;
+                info += `📊 Тип: Беседа VK\n`;
+                if (s.members_count) info += `👥 Участников: ${s.members_count}\n`;
+            } else {
+                const [u] = await api('users.get', { user_ids: peer });
+                info += `📝 Название: ЛС с ${u ? fullName(u) : peer}\n`;
+                info += `🆔 ID: ${peer}\n`;
+                info += `📊 Тип: Личные сообщения VK\n`;
+            }
+            info += `${DIVIDER}`;
+            return ctx.reply(info);
+        }
         if (peer > 2000000000) {
             const r = await api('messages.getConversationsById', { peer_ids: peer });
             const c = r.items && r.items[0];
@@ -1046,7 +1103,22 @@ function registerDefaultCommands(client) {
         return client.send(ctx.msg.peerId, '✅ Ключ OpenRouter сохранён, команда с ним удалена');
     });
     reg('ор_статус', 'AI / OPENROUTER', 'ор_статус', 3, async (ctx) => {
-        return ctx.reply(`🤖 OpenRouter\nКлюч: ${orKey() ? 'задан' : 'не задан'}\nМодель: ${client.state.openrouter.model}\nЗапросов с запуска: ${client.aiRequests}`);
+        const k = orKey();
+        const p = client.config.prefix;
+        return ctx.reply(
+            `🤖 OpenRouter AI — Статус 🤖\n` +
+            `${DIVIDER}\n` +
+            `📊 Статус: ${k ? '✅ Активен' : '❌ Неактивен'}\n` +
+            `🔑 Ключ: ${k ? 'задан' : 'не задан'}\n` +
+            `🧠 Модель: ${client.state.openrouter.model}\n` +
+            `📈 Запросов с запуска: ${client.aiRequests}\n` +
+            `${DIVIDER}\n` +
+            `💡 Команды:\n` +
+            `• ${p}ор [запрос] — общение с AI\n` +
+            `• ${p}ор_ключ [ключ] — установить ключ\n` +
+            `• ${p}ор_модель [модель] — сменить модель\n` +
+            `• ${p}ор_помощь — справка по AI`
+        );
     });
     reg('ор_модель', 'AI / OPENROUTER', 'ор_модель [модель]', 'owner', async (ctx) => {
         const m = ctx.args[0];

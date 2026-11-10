@@ -1,3 +1,4 @@
+const DIVIDER = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬';
 let coreInstance = null;
 
 async function executeShowCommands(core, { args, message, chatId, senderId, messageId }) {
@@ -77,38 +78,39 @@ async function executeShowCommands(core, { args, message, chatId, senderId, mess
 
     const prefix = settings.prefix || '!';
 
-    let response = `🤖 СПИСОК КОМАНД UNIFIED BOT 🤖\n\n`;
-    response += `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+    let response = `🤖 LP-BOT [TG] — СПИСОК КОМАНД 🤖\n`;
+    response += `${DIVIDER}\n`;
     response += `📋 Префикс команд: ${prefix}\n`;
     response += `🔢 Всего команд: ${totalCmds}\n`;
     response += `🎯 Триггеров: ${triggersCount}\n`;
-    response += `⏰ Аптайм: ${uptimeSec} сек.\n\n`;
-    response += `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
+    response += `⏰ Аптайм: ${uptimeSec} сек.\n`;
+    response += `${DIVIDER}\n\n`;
 
     for (const [category, commands] of Object.entries(categories)) {
         response += `${category}:\n`;
         commands.forEach((cmd) => {
-            response += `   🔹 ${prefix}${cmd.command} - ${cmd.description}\n`;
+            response += `   🔹 ${prefix}${cmd.command} — ${cmd.description}\n`;
         });
         response += `\n`;
     }
 
-    response += `⚡ Версия: ${custom.version || realVersion}\n`;
-    response += `🔧 ${custom.creator ? 'Придумал' : 'Разработчик'}: ${custom.creator || realCreator}\n\n`;
+    response += `${DIVIDER}\n`;
+    response += `⚡ Версия: ${custom.version || realVersion} | 🔧 Разработчик: ${custom.creator || realCreator}\n`;
 
     if (custom.uptime || custom.botName || custom.status) {
-        response += `🎭 Кастомные настройки:\n`;
-        if (custom.botName) response += `• Имя: ${custom.botName}\n`;
-        if (custom.status) response += `• Статус: ${custom.status}\n`;
-        if (custom.uptime) response += `• Аптайм: ${custom.uptime}\n`;
-        response += `\n`;
+        response += `🎭 Кастомные настройки: `;
+        const customParts = [];
+        if (custom.botName) customParts.push(`Имя: ${custom.botName}`);
+        if (custom.status) customParts.push(`Статус: ${custom.status}`);
+        if (custom.uptime) customParts.push(`Аптайм: ${custom.uptime}`);
+        response += customParts.join(' • ') + '\n';
     }
 
     response += `💡 Используйте ответы на сообщения для некоторых команд!\n\n`;
     response += `🎪 Прикольные команды:\n`;
-    response += `• ${prefix}кастом - Настроить кастомные значения\n`;
-    response += `• ${prefix}по_приколу - Установить прикольные значения\n`;
-    response += `• ${prefix}сброс_прикола - Сбросить кастомные значения`;
+    response += `• ${prefix}кастом — Настроить кастомные значения\n`;
+    response += `• ${prefix}по_приколу — Установить прикольные значения\n`;
+    response += `• ${prefix}сброс_прикола — Сбросить кастомные значения`;
 
     await messaging.editMessage(chatId, messageId, response);
 }
@@ -128,7 +130,7 @@ module.exports = {
                 return executeShowCommands(c, ctx);
             },
             help: 'Список всех команд',
-            aliases: []
+            aliases: ['хелп', 'кмд', 'help']
         }
     },
     async init(core) {

@@ -1,4 +1,5 @@
 const axios = require('axios');
+const DIVIDER = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬';
 
 /**
  * DeepSeek AI Integration Module
@@ -213,16 +214,18 @@ module.exports = {
                 const apiKeyStatus = dsConfig.apiKey ?
                     `🔑 ${dsConfig.apiKey.substring(0, 10)}...` : '❌ Не установлен';
 
-                const response = `📊 Статус DeepSeek\n\n` +
-                    `• Статус: ${status}\n` +
-                    `• API ключ: ${apiKeyStatus}\n` +
-                    `• Модель: ${dsConfig.model}\n` +
-                    `• Макс. токенов: ${dsConfig.maxTokens}\n` +
-                    `• Температура: ${dsConfig.temperature}\n\n` +
+                const response = `🤖 DEEPSEEK AI — СТАТУС 🤖\n` +
+                    `${DIVIDER}\n` +
+                    `📊 Статус: ${status}\n` +
+                    `🔑 Ключ: ${apiKeyStatus}\n` +
+                    `🧠 Модель: ${dsConfig.model}\n` +
+                    `⚙️ Макс. токенов: ${dsConfig.maxTokens}\n` +
+                    `🌡️ Температура: ${dsConfig.temperature}\n` +
+                    `${DIVIDER}\n` +
                     `💡 Команды:\n` +
-                    `• ${prefix}дип [запрос] - общение с AI\n` +
-                    `• ${prefix}дип_ключ [ключ] - установить ключ\n` +
-                    `• ${prefix}дип_помощь - подробная помощь`;
+                    `• ${prefix}дип [запрос] — общение с AI\n` +
+                    `• ${prefix}дип_ключ [ключ] — установить ключ\n` +
+                    `• ${prefix}дип_помощь — подробная помощь`;
 
                 await messaging.editMessage(chatId, messageId, response);
             }
@@ -237,20 +240,20 @@ module.exports = {
                 const settings = core.get('settings');
                 const prefix = settings.get('prefix', '.');
 
-                const helpText = `🤖 DeepSeek AI - Помощь\n\n` +
+                const helpText = `🤖 DEEPSEEK AI — ПОМОЩЬ 🤖\n` +
+                    `${DIVIDER}\n` +
                     `🔑 ПОЛУЧЕНИЕ API КЛЮЧА:\n` +
                     `1. Откройте: https://platform.deepseek.com\n` +
                     `2. Войдите или зарегистрируйтесь\n` +
-                    `3. Перейдите в "API Keys"\n` +
-                    `4. Нажмите "Create new API key"\n` +
-                    `5. Скопируйте ключ (начинается с sk-)\n\n` +
+                    `3. Перейдите в "API Keys" и скопируйте ключ\n\n` +
                     `⚙️ НАСТРОЙКА БОТА:\n` +
-                    `• ${prefix}дип_ключ sk-ваш_ключ - установить ключ\n` +
-                    `• ${prefix}дип_статус - проверить статус\n\n` +
+                    `• ${prefix}дип_ключ sk-ваш_ключ — установить ключ\n` +
+                    `• ${prefix}дип_статус — проверить статус\n\n` +
                     `💬 ИСПОЛЬЗОВАНИЕ AI:\n` +
-                    `• ${prefix}дип [вопрос] - задать вопрос\n` +
+                    `• ${prefix}дип [вопрос] — задать вопрос\n` +
                     `• ${prefix}дип напиши код на Python\n` +
-                    `• ${prefix}дип объясни квантовую физику\n\n` +
+                    `• ${prefix}дип объясни квантовую физику\n` +
+                    `${DIVIDER}\n` +
                     `❓ РЕШЕНИЕ ПРОБЛЕМ:\n` +
                     `• Ошибка 401: Неверный API ключ\n` +
                     `• Ошибка 402: Закончились средства\n` +

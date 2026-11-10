@@ -1,3 +1,4 @@
+const fs = require('fs');
 const path = require('path');
 const VkClient = require(path.join(__dirname, '..', '..', 'vk_client.js'));
 
@@ -137,15 +138,26 @@ module.exports = {
         const prefix = settings.get('prefix', '*');
         const vkConfig = settings.get('vk', {}) || {};
 
-        const token = process.env.VK_USER_TOKEN || vkConfig.userToken || vkConfig.token || '';
-        const proxy = vkConfig.proxy !== undefined ? vkConfig.proxy : (process.env.VK_PROXY || '');
-        const trustedIds = Array.isArray(vkConfig.trustedIds) ? vkConfig.trustedIds : [];
+        let fileConfig = {};
+        try {
+            const utils = core.get('utils');
+            const configPath = (utils && utils.paths && utils.paths.CONFIG_PATH) || path.resolve('config.json');
+            if (fs.existsSync(configPath)) {
+                fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            }
+        } catch {}
+        const cfgVk = fileConfig.vk || {};
+
+        const token = process.env.VK_USER_TOKEN || cfgVk.userToken || vkConfig.userToken || vkConfig.token || '';
+        const proxy = vkConfig.proxy !== undefined ? vkConfig.proxy : (cfgVk.proxy !== undefined ? cfgVk.proxy : (process.env.VK_PROXY || ''));
+        const trustedIds = Array.isArray(vkConfig.trustedIds) ? vkConfig.trustedIds : (Array.isArray(cfgVk.trustedIds) ? cfgVk.trustedIds : []);
 
         const clientConfig = {
             prefix,
             proxy,
             userToken: token,
             trustedIds,
+            ...cfgVk,
             ...vkConfig
         };
 

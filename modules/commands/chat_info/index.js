@@ -1,3 +1,4 @@
+const DIVIDER = '▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬';
 let coreInstance = null;
 
 async function executeChatInfo(core, { args, message, chatId, senderId, messageId }) {
@@ -10,7 +11,8 @@ async function executeChatInfo(core, { args, message, chatId, senderId, messageI
         }
 
         const chat = await telegram.client.getEntity(chatId);
-        let info = `💬 Информация о чате:\n\n`;
+        let info = `💬 ИНФОРМАЦИЯ О ЧАТЕ 💬\n`;
+        info += `${DIVIDER}\n`;
 
         if (chat.title) info += `📝 Название: ${chat.title}\n`;
         if (chat.username) info += `🔗 Юзернейм: @${chat.username}\n`;
@@ -20,6 +22,7 @@ async function executeChatInfo(core, { args, message, chatId, senderId, messageI
         if (chat.participantsCount) {
             info += `👥 Участников: ${chat.participantsCount}\n`;
         }
+        info += `${DIVIDER}`;
 
         await messaging.editMessage(chatId, messageId, info);
     } catch (error) {
@@ -42,7 +45,7 @@ module.exports = {
                 return executeChatInfo(c, ctx);
             },
             help: 'Информация о текущем чате',
-            aliases: []
+            aliases: ['инфо', 'чат']
         }
     },
     async init(core) {

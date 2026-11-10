@@ -1126,7 +1126,8 @@ startKeepAlive() {
 async startWebInterface() {
     try {
         if (!this.webInterface) {
-            this.webInterface = new WebInterface(this, null, 3001, this.panelHost);
+            const port = Number(process.env.PANEL_PORT) || (typeof appConfig !== 'undefined' && appConfig.panelPort) || 3001;
+            this.webInterface = new WebInterface(this, null, port, this.panelHost);
         }
         await this.webInterface.start();
         console.log('✅ Веб-интерфейс запущен');
@@ -2235,9 +2236,29 @@ async startWebInterface() {
             await this.ensureUserExists(senderIdValue, null, null, null);
         }
         
-        const handler = this.commands[command];
-        // VK-команды из TG: вк_[команда] и вк_[peerId]_[команда] (ТЗ п. 5.6), выполняет vkClient
-        if (!handler && command.startsWith('вк_') && this.vkClient) {
+        // Паритет команд: алиасы-синонимы TG
+        const TG_ALIASES = {
+            'кмд': 'команды',
+            'хелп': 'команды',
+            'help': 'команды',
+            'пинг': 'тест',
+            'ор': 'дип',
+            'инфо': 'о_чате',
+            'чат': 'о_чате',
+            'удалить': 'смс',
+            'пин': 'закреп',
+            'ш': 'шаб'
+        };
+        let handler = this.commands[command] || (TG_ALIASES[command] && this.commands[TG_ALIASES[command]]);
+        const resolvedCommand = handler ? (this.commands[command] ? command : TG_ALIASES[command]) : (TG_ALIASES[command] || command);
+
+        // VK-команды из TG: вк_[команда], вк_[peerId]_[команда] или прямой вызов (онлайн, невидимка, лп_статус, вк_токен и др.)
+        const isVkCmd = !handler && this.vkClient && (
+            command.startsWith('вк_') ||
+            (this.vkClient.commands && this.vkClient.commands.has(command))
+        );
+
+        if (isVkCmd) {
             // Мост выполняет команду в VK с правами владельца, поэтому пускаем только сообщения самого аккаунта
             const ownId = this.botInfo && ((this.botInfo.id && this.botInfo.id.value) ? Number(this.botInfo.id.value) : Number(this.botInfo.id));
             const fromOwner = Boolean((message && message.out) || (ownId && senderIdValue === ownId));
@@ -2245,7 +2266,8 @@ async startWebInterface() {
                 console.log(`⛔ ${command} от ${senderIdValue}: мост TG → VK только для владельца, отклонено`);
                 return;
             }
-            await this.editMessage(chatIdValue, messageIdValue, await this.vkClient.runFromTg(command.slice(3), args, { fromOwner: true }));
+            const targetCmd = command.startsWith('вк_') ? command.slice(3) : command;
+            await this.editMessage(chatIdValue, messageIdValue, await this.vkClient.runFromTg(targetCmd, args, { fromOwner: true }));
             return;
         }
         if (handler) {
@@ -2363,7 +2385,7 @@ async startWebInterface() {
         ]
     };
 
-    let response = `🤖 СПИСОК КОМАНД UNIFIED BOT 🤖\n\n`;
+    let response = `🤖 LP-BOT [TG] 🤖\n\n`;
     response += `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
     response += `📋 Префикс команд: ${this.settings.prefix}\n`;
     response += `🔢 Всего команд: ${Object.keys(this.commands).length}\n`;
