@@ -497,7 +497,7 @@ class VkClient {
 // =====================================================================
 const SECTIONS = ['БАЗОВЫЕ', 'СООБЩЕНИЯ', 'VK СПЕЦ.', 'ЗАЩИТА', 'LP LOGGER', 'ВЛАДЕЛЕЦ', 'AI / OPENROUTER'];
 const PROTECTION = ['антимат', 'антиlink', 'антискрин', 'антифлуд', 'антибот', 'капча', 'антиспам'];
-const SECRET_FILES = /(^|[\\/])(config\.json|congif\.json|session\.txt|settings\.json|\.env)$|\.sqlite$/i;
+const { isSecretPath } = require('./secret_files.js'); // общий список секретных файлов с TG-командами ‘код
 
 function onOff(arg) {
     const a = String(arg || '').toLowerCase();
@@ -894,7 +894,7 @@ function registerDefaultCommands(client) {
         const base = path.resolve(__dirname);
         const full = path.resolve(base, file);
         if (!full.startsWith(base + path.sep) || full.includes(`${path.sep}node_modules${path.sep}`)) return ctx.reply('❌ Можно смотреть только файлы бота');
-        if (SECRET_FILES.test(full)) return ctx.reply('⛔ Этот файл содержит секреты, его не показываю');
+        if (isSecretPath(path.relative(base, full))) return ctx.reply('⛔ Этот файл содержит секреты, его не показываю');
         if (!fs.existsSync(full)) return ctx.reply(`❌ Файл ${file} не найден`);
         const lines = fs.readFileSync(full, 'utf8').split(/\r?\n/);
         const [a, b2] = String(range || '1-50').split('-').map(Number);

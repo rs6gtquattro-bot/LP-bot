@@ -110,6 +110,8 @@ gui\start_gui.bat
 
 Подробно о VK-клиенте — `docs/vk_client_spec.md`.
 
+Файловые команды `*код …` (TG) и `код показать` (VK) не читают, не меняют и не восстанавливают секретные файлы: `session.txt`, `*.session`, `config.json`, `settings.json`, `.env`, `.env.*`, `*.sqlite`, папку `.git` и бэкапы этих файлов в `backups/`. Регистр букв не важен. Список задан в `secret_files.js`.
+
 ## Тесты
 
 Тесты запускаются только на Linux (WSL). На Windows их не гоняют.
@@ -117,7 +119,7 @@ gui\start_gui.bat
 Все тесты, кроме `panel_host`, идут на заглушках и обязаны запускаться без сети, под `unshare -rn`. В каждом из них первой строкой стоит проверка `tests/_no_network.js`: если у машины есть сетевой интерфейс кроме петли, тест сразу пишет `FAIL сеть доступна` и завершается с кодом 1. Обхода у этой проверки нет.
 
 ```sh
-for t in auth trigger-time vk_client vk_commands tg_ws startup_log; do unshare -rn node tests/$t.test.js; done
+for t in auth trigger-time vk_client vk_commands tg_ws startup_log secret_files; do unshare -rn node tests/$t.test.js; done
 node tests/panel_host.test.js
 ```
 
