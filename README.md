@@ -112,12 +112,25 @@ gui\start_gui.bat
 
 ## Тесты
 
+Все тесты, кроме `panel_host`, идут на заглушках и обязаны запускаться без сети. В каждом из них первой строкой стоит проверка `tests/_no_network.js`: если у машины есть сетевой интерфейс кроме петли, тест сразу пишет `FAIL сеть доступна` и завершается с кодом 1.
+
+Linux (WSL):
+
+```sh
+for t in auth trigger-time vk_client vk_commands tg_port startup_log; do unshare -rn node tests/$t.test.js; done
+node tests/panel_host.test.js
+```
+
+`panel_host` запускается с сетью: он поднимает панель и проверяет, что она слушает только `127.0.0.1` и не принимает подключения с внешнего интерфейса. Ему нужны установленные `node_modules` (express, ws).
+
+Windows: `unshare` там нет. Либо отключите сеть на время прогона, либо осознанно снимите проверку через `set LP_TEST_ALLOW_NET=1` (тест напечатает `WARN`). На `startup_log` обход не действует: он запускает настоящий `script.js`, который с сетью подключится к Telegram, поэтому его гоняют только без сети.
+
 ```bat
 node tests\auth.test.js
 node tests\trigger-time.test.js
 node tests\vk_client.test.js
 node tests\vk_commands.test.js
+node tests\tg_port.test.js
+node tests\startup_log.test.js
 node tests\panel_host.test.js
 ```
-
-Тесты работают на заглушках и не обращаются к Telegram, VK и OpenRouter. `panel_host.test.js` нужны установленные `node_modules` (express, ws): он поднимает панель и проверяет, что она слушает только `127.0.0.1` и не принимает подключения с внешнего интерфейса.

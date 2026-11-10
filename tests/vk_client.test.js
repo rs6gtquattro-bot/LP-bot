@@ -1,3 +1,4 @@
+require('./_no_network.js')(); // без сети, иначе FAIL (см. tests/_no_network.js)
 // Тесты vk_client.js по критериям приёмки ТЗ (п. 9). Сеть только через заглушки:
 // реальный axios, tor и VK не используются, токен фиктивный.
 // Запуск: node tests/vk_client.test.js

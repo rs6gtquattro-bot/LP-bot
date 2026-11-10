@@ -1,3 +1,4 @@
+require('./_no_network.js')(); // без сети, иначе FAIL (см. tests/_no_network.js)
 // Проверка: Telegram-клиент ходит на порт 443 (useWSS: true), а не на 80.
 // Нужны node_modules (telegram). Сеть не используется: клиент создаётся, но connect() не вызывается.
 const path = require('path');
