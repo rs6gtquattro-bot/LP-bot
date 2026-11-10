@@ -5,10 +5,13 @@ const WebSocket = require('ws');
 const LOG_LIMIT = 500;
 
 class WebInterface {
-    constructor(bot, db, port = 3001) {
+    // host: адрес, на котором слушает панель. По умолчанию только локальная петля 127.0.0.1,
+    // наружу панель открывается только явно через panelHost в config.json.
+    constructor(bot, db, port = 3001, host = '127.0.0.1') {
         this.bot = bot;
         this.db = db || (bot && bot.db);
         this.port = port;
+        this.host = host || '127.0.0.1';
         this.server = null;
         this.wss = null;
         this.logs = [];
@@ -350,9 +353,9 @@ class WebInterface {
     async start() {
         try {
             await new Promise((resolve, reject) => {
-                this.server = this.app.listen(this.port, (err) => {
+                this.server = this.app.listen(this.port, this.host, (err) => {
                     if (err) return reject(err);
-                    console.log(`🌐 Веб-интерфейс запущен на порту ${this.port}`);
+                    console.log(`🌐 Веб-интерфейс запущен на ${this.host}:${this.port}`);
                     resolve();
                 });
                 this.server.on('error', reject);
