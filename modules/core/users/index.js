@@ -102,6 +102,7 @@ module.exports = {
     version: '1.0.0',
     engine: '^1.0.0',
     requires: ['db'],
+    UsersService,
 
     async init(core) {
         const db = core.get('db');

@@ -3,6 +3,11 @@ const path = require('path');
 
 const DEFAULT_SETTINGS = {
     prefix: '!',
+    responseMode: 'edit',
+    allowMultiPrefix: false,
+    chatBlacklist: [],
+    chatWhitelist: [],
+    whitelistEnabled: false,
     notifications: true,
     autoStatus: false,
     autoStatusSettings: { mode: 1, interval: 60 },
@@ -81,6 +86,14 @@ class SettingsService {
 
     get prefix() {
         return this.data.prefix || '!';
+    }
+
+    get responseMode() {
+        return this.data.responseMode || 'edit';
+    }
+
+    get allowMultiPrefix() {
+        return Boolean(this.data.allowMultiPrefix);
     }
 
     setPrefix(p) {

@@ -355,12 +355,15 @@ class VkClient {
                 return { matched: true, length: 1, char: firstChar };
             }
         }
-        // Поддержка дуального префикса (* и !) для стандартных конфигураций
-        if (configured === '!' && text.startsWith('*')) {
-            return { matched: true, length: 1, char: '*' };
-        }
-        if (configured === '*' && text.startsWith('!')) {
-            return { matched: true, length: 1, char: '!' };
+        // Поддержка дуального префикса (* и !) при включенной настройке allowMultiPrefix
+        const multi = Boolean(this.config.allowMultiPrefix || (this.bot && this.bot.settings && this.bot.settings.allowMultiPrefix));
+        if (multi) {
+            if (configured === '!' && text.startsWith('*')) {
+                return { matched: true, length: 1, char: '*' };
+            }
+            if (configured === '*' && text.startsWith('!')) {
+                return { matched: true, length: 1, char: '!' };
+            }
         }
         return null;
     }
@@ -496,7 +499,8 @@ class VkClient {
             async reply(text) {
                 ctx.replies.push(text);
                 if (msg.fromTg) return null;
-                if (msg.out && msg.messageId) {
+                const mode = (client.bot && client.bot.settings && client.bot.settings.responseMode) || client.config.responseMode || 'edit';
+                if (mode === 'edit' && msg.out && msg.messageId) {
                     await client.api('messages.edit', { peer_id: msg.peerId, message_id: msg.messageId, message: text, keep_forward_messages: 1 });
                     return msg.messageId;
                 }

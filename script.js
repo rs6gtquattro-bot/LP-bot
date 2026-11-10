@@ -28,7 +28,7 @@
 // импорты
 const { TelegramClient } = require('telegram');
 const { StringSession } = require('telegram/sessions');
-const { useWebTelegramDCs, webClientParams } = require('./tg_web_dc.js'); // TG только через *.web.telegram.org
+const { useWebTelegramDCs, webClientParams, parseTelegramProxy } = require('./tg_web_dc.js'); // TG только через *.web.telegram.org
 const { resolveBotPath, resolveRestore } = require('./secret_files.js'); // файловые команды не трогают секретные файлы
 const { DB_PATH, SESSION_PATH, CONFIG_PATH, SETTINGS_PATH, BACKUPS_DIR, DATA_DIR } = require('./paths.js'); // постоянные пути для .exe и прода
 const { NewMessage } = require('telegram/events');
@@ -72,6 +72,8 @@ class lpbot {
         
         this.settings = {
             prefix: '!',
+            responseMode: 'edit',
+            allowMultiPrefix: false,
             notifications: true,
             autoStatus: false,
             autoStatusSettings: { mode: 1, interval: 60 },
@@ -673,6 +675,8 @@ async saveTimersToDatabase() {
         const settingsFile = SETTINGS_PATH;
         const settingsData = {
             prefix: this.settings.prefix,
+            responseMode: this.settings.responseMode || 'edit',
+            allowMultiPrefix: Boolean(this.settings.allowMultiPrefix),
             notifications: this.settings.notifications,
             autoStatus: this.settings.autoStatus,
             autoStatusSettings: this.settings.autoStatusSettings,
@@ -704,6 +708,12 @@ async saveTimersToDatabase() {
             // Загружаем основные настройки
             this.settings.prefix = settingsData.prefix || '!';
             if (this.vkClient) this.vkClient.setPrefix(this.settings.prefix);
+            this.settings.responseMode = settingsData.responseMode || 'edit';
+            this.settings.allowMultiPrefix = Boolean(settingsData.allowMultiPrefix);
+            if (this.vkClient && this.vkClient.config) {
+                this.vkClient.config.responseMode = this.settings.responseMode;
+                this.vkClient.config.allowMultiPrefix = this.settings.allowMultiPrefix;
+            }
             this.settings.notifications = settingsData.notifications !== undefined ? settingsData.notifications : true;
             this.settings.autoStatus = settingsData.autoStatus || false;
             this.settings.autoStatusSettings = settingsData.autoStatusSettings || { mode: 1, interval: 60 };
@@ -947,6 +957,11 @@ async saveTimersToDatabase() {
         
         const stringSession = new StringSession(this.sessionString || '');
         
+        const tgProxy = parseTelegramProxy(this.telegramProxy || (typeof appConfig !== 'undefined' && (appConfig.telegramProxy || (appConfig.telegram && appConfig.telegram.proxy))) || process.env.TELEGRAM_PROXY);
+        if (tgProxy) {
+            console.log(`🛡️ Telegram: используем прокси ${tgProxy.ip}:${tgProxy.port} (SOCKS${tgProxy.socksType})`);
+        }
+
         // ОПТИМИЗИРОВАННАЯ конфигурация клиента
         this.telegramClient = new TelegramClient(stringSession, this.telegramApiId, this.telegramApiHash, {
             connectionRetries: 10,
@@ -961,7 +976,8 @@ async saveTimersToDatabase() {
             systemLangCode: 'ru',
             baseLogger: undefined,
             useIPV6: false,
-            proxy: null
+            proxy: null,
+            ...(tgProxy ? { proxy: tgProxy, useWSS: undefined, networkSocket: undefined, connection: undefined } : {})
         });
         useWebTelegramDCs(this.telegramClient); // стартовый DC и переходы между DC только по web-именам
 
@@ -1325,14 +1341,20 @@ async startWebInterface() {
             const isOwner = this.isOwnerMessage(message, senderId);
 
             // Обработка команд (если сообщение начинается с префикса)
+            let prefixLen = 0;
             if (text.startsWith(this.settings.prefix)) {
+                prefixLen = this.settings.prefix.length;
+            } else if (this.settings.allowMultiPrefix && (text.startsWith('!') || text.startsWith('*'))) {
+                prefixLen = 1;
+            }
+            if (prefixLen > 0) {
                 if (!isOwner) {
                     console.warn(`⛔ [SECURITY] Отклонена попытка вызова команды от не-владельца (senderId: ${senderId})`);
                     return;
                 }
 
                 const parts = text.split(' ');
-                const command = parts[0].toLowerCase().substring(this.settings.prefix.length);
+                const command = parts[0].toLowerCase().substring(prefixLen);
                 const args = parts.slice(1);
                 
                 console.log(`🔧 Вызов команды: ${command}, args: ${args}`);
@@ -2215,6 +2237,17 @@ async startWebInterface() {
             return;
         }
 
+        // Если настроен режим 'reply', отправляем ответ на команду новым сообщением
+        if (this.settings.responseMode === 'reply') {
+            await this.telegramClient.sendMessage(chatIdNum, {
+                message: newText,
+                replyTo: messageIdNum,
+                parseMode: null
+            });
+            return;
+        }
+
+        // По умолчанию режим 'edit' (классический UserBot: редактируем исходное сообщение)
         await this.telegramClient.editMessage(chatIdNum, {
             message: messageIdNum,
             text: newText,
@@ -2338,7 +2371,32 @@ async startWebInterface() {
 
     async changePrefix(args, message, chatId, senderId, messageId) {
         if (args.length === 0) {
-            await this.editMessage(chatId, messageId, `📝 Использование: ${this.settings.prefix}префикс [новый_префикс]`);
+            await this.editMessage(chatId, messageId,
+                `📝 УПРАВЛЕНИЕ ПРЕФИКСАМИ И ОТВЕТАМИ:\n\n` +
+                `• ${this.settings.prefix}префикс [новый] — изменить основной префикс (сейчас: «${this.settings.prefix}»)\n` +
+                `• ${this.settings.prefix}префикс мульти [вкл/выкл] — мультипрефикс ! и * (сейчас: ${this.settings.allowMultiPrefix ? 'вкл' : 'выкл'})\n` +
+                `• ${this.settings.prefix}префикс ответ [edit/reply] — режим ответа: редактирование или ответ (сейчас: ${this.settings.responseMode || 'edit'})`
+            );
+            return;
+        }
+
+        const sub = args[0].toLowerCase();
+        if (sub === 'мульти' || sub === 'multi') {
+            const val = (args[1] || '').toLowerCase();
+            this.settings.allowMultiPrefix = (val === 'вкл' || val === 'on' || val === 'true' || val === '1');
+            if (this.vkClient && this.vkClient.config) this.vkClient.config.allowMultiPrefix = this.settings.allowMultiPrefix;
+            this.saveSettings();
+            await this.editMessage(chatId, messageId, `✅ Мультипрефикс (! и *): ${this.settings.allowMultiPrefix ? 'ВКЛЮЧЕН' : 'ВЫКЛЮЧЕН'}`);
+            return;
+        }
+
+        if (sub === 'ответ' || sub === 'режим_ответа' || sub === 'mode') {
+            const val = (args[1] || '').toLowerCase();
+            const mode = (val === 'reply' || val === 'ответ' || val === 'смс') ? 'reply' : 'edit';
+            this.settings.responseMode = mode;
+            if (this.vkClient && this.vkClient.config) this.vkClient.config.responseMode = mode;
+            this.saveSettings();
+            await this.editMessage(chatId, messageId, `✅ Режим ответа установлен: ${mode === 'reply' ? 'ОТВЕТ (новое сообщение)' : 'РЕДАКТИРОВАНИЕ (edit)'}`);
             return;
         }
         

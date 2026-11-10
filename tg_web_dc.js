@@ -25,4 +25,51 @@ function useWebTelegramDCs(client) {
     return client;
 }
 
-module.exports = { useWebTelegramDCs, webClientParams, DEFAULT_DC_ID };
+function parseTelegramProxy(proxyConfig) {
+    if (!proxyConfig) return null;
+    if (typeof proxyConfig === 'object') {
+        if (proxyConfig.ip && proxyConfig.port) {
+            return {
+                ip: String(proxyConfig.ip),
+                port: Number(proxyConfig.port),
+                socksType: Number(proxyConfig.socksType) || 5,
+                username: proxyConfig.username || undefined,
+                password: proxyConfig.password || undefined,
+                timeout: Number(proxyConfig.timeout) || 10,
+                MTProxy: proxyConfig.MTProxy || undefined,
+                secret: proxyConfig.secret || undefined
+            };
+        }
+        return null;
+    }
+    if (typeof proxyConfig === 'string') {
+        const trimmed = proxyConfig.trim();
+        if (!trimmed) return null;
+        try {
+            const parsed = new URL(trimmed);
+            const isSocks = parsed.protocol.startsWith('socks');
+            const socksType = parsed.protocol.includes('4') ? 4 : 5;
+            return {
+                ip: parsed.hostname,
+                port: Number(parsed.port) || (isSocks ? 1080 : 8080),
+                socksType: isSocks ? socksType : 5,
+                username: parsed.username ? decodeURIComponent(parsed.username) : undefined,
+                password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
+                timeout: 10
+            };
+        } catch {
+            const parts = trimmed.split(':');
+            if (parts.length >= 2) {
+                return {
+                    ip: parts[0],
+                    port: Number(parts[1]),
+                    socksType: 5,
+                    timeout: 10
+                };
+            }
+        }
+    }
+    return null;
+}
+
+module.exports = { useWebTelegramDCs, webClientParams, DEFAULT_DC_ID, parseTelegramProxy };

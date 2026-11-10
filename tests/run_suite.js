@@ -21,7 +21,8 @@ const TESTS = [
     { name: 'security_panel', file: 'security_panel.test.js', desc: 'Защита веб-панели: Bearer-токен, CSRF Origin, CSWSH' },
     { name: 'registry', file: 'registry.test.js', desc: 'Слепок реестра команд TG (40) и VK (47)' },
     { name: 'panel_host', file: 'panel_host.test.js', desc: 'Привязка веб-панели к 127.0.0.1 (Express + WS)' },
-    { name: 'dist_security', file: 'dist_security.test.js', desc: 'Фильтры сборщика .exe и защита релизных артефактов от утечки секретов' }
+    { name: 'dist_security', file: 'dist_security.test.js', desc: 'Фильтры сборщика .exe и защита релизных артефактов от утечки секретов' },
+    { name: 'new_tz_features', file: 'new_tz_features.test.js', desc: 'Требования нового ТЗ (edit vs reply, строгий префикс, ACL, смс)' }
 ];
 
 console.log('===============================================================');

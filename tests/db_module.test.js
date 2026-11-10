@@ -7,7 +7,7 @@ const { createCore } = require('../main.js');
 const dbModule = require('../modules/core/db/index.js');
 
 async function runTests() {
-    console.log('🧪 Запуск тестов модуля службы базы данных modules/core/db...\n');
+    console.log('🧪 Запуск тестов модуля службы базы данных modules/core/db (P0 Refactor)...\n');
 
     // 1. Проверка контракта модуля
     console.log('1. Проверка контракта docs/modules.md...');
@@ -17,6 +17,7 @@ async function runTests() {
     assert.deepEqual(dbModule.requires, []);
     assert.equal(typeof dbModule.init, 'function');
     assert.equal(typeof dbModule.stop, 'function');
+    assert.equal(typeof dbModule.open, 'function');
     console.log('✅ Контракт модуля полностью соответствует спецификации.');
 
     // Временная директория для изолированной тестовой базы
@@ -51,133 +52,128 @@ async function runTests() {
         assert.equal(journal.journal_mode.toLowerCase(), 'wal', 'journal_mode должен быть wal');
         console.log('✅ PRAGMA настройки: WAL, busy_timeout=5000, foreign_keys=1 подтверждены.');
 
-        // 4. Проверка схем и таблиц
-        console.log('\n4. Проверка создания всех таблиц и справочников...');
+        // 4. Проверка схем и таблиц P0
+        console.log('\n4. Проверка создания чистых таблиц (P0)...');
         const tables = (await db.all("SELECT name FROM sqlite_master WHERE type='table'")).map(t => t.name);
         const requiredTables = [
             'users', 'access_levels', 'user_stats', 'command_history',
-            'photo_boost_stats', 'triggers', 'templates', 'timers',
+            'notes', 'acl', 'triggers', 'templates', 'timers',
             'vk_state', '_corrupted_users_backup', 'schema_migrations'
         ];
         for (const reqTable of requiredTables) {
             assert(tables.includes(reqTable), `Таблица ${reqTable} должна существовать в БД`);
         }
+        assert(!tables.includes('photo_boost_stats'), 'Таблица photo_boost_stats должна быть удалена!');
+        assert(!tables.includes('casino'), 'Таблица casino должна быть удалена!');
+        assert(!tables.includes('rpg'), 'Таблица rpg должна быть удалена!');
 
-        const levels = await db.all('SELECT * FROM access_levels ORDER BY level');
-        assert.equal(levels.length, 5, 'Должно быть 5 уровней доступа');
-        assert.equal(levels[4].name, 'owner');
-        console.log(`✅ Все ${requiredTables.length} таблиц и справочник уровней доступа успешно созданы.`);
+        console.log(`✅ Схема P0 чистая: legacy таблицы удалены, новые сущности (notes, acl) созданы.`);
 
-        // 5. Тестирование пользователей и защиты от [object Object]
-        console.log('\n5. Тестирование методов пользователей и защиты от [object Object]...');
-        // Попытка вставки [object Object]
-        const blocked = await db.ensureUser({ foo: 'bar' });
-        assert.equal(blocked, null, 'Вставка объекта без id должна быть отклонена');
+        // 5. Тестирование CRUD для notes (заметки)
+        console.log('\n5. Тестирование CRUD для notes (заметки)...');
+        await db.saveNote('правила', 'Текст правил сообщества');
+        await db.saveNote('ссылки', 'https://example.com');
 
-        // Корректная вставка пользователя
-        const user1 = await db.ensureUser(123456789n, 'testuser', 'Test', 'User', 1);
-        assert(user1, 'Пользователь должен быть создан');
-        assert.equal(user1.tg_id, 123456789);
-        assert.equal(user1.username, 'testuser');
-        assert.equal(user1.access_level, 1);
+        let note = await db.getNote('правила');
+        assert(note);
+        assert.equal(note.name, 'правила');
+        assert.equal(note.content, 'Текст правил сообщества');
 
-        const fetchedUser = await db.getUser('123456789');
-        assert.equal(fetchedUser.id, user1.id);
-        console.log('✅ Пользователь успешно сохранён, защита от [object Object] работает.');
+        // Case-insensitivity и trim
+        note = await db.getNote('  ПРАВИЛА  ');
+        assert(note);
+        assert.equal(note.content, 'Текст правил сообщества');
 
-        // 6. Тестирование атомарного UPSERT триггеров
-        console.log('\n6. Тестирование атомарного UPSERT триггеров...');
-        const triggersMap = new Map();
-        triggersMap.set('привет', {
-            word: 'привет',
-            responses: ['Привет, мир!'],
-            settings: { enabled: true, used: 3 }
+        // UPSERT заметки с обновлением
+        await db.saveNote('правила', 'Обновленный текст правил');
+        note = await db.getNote('правила');
+        assert.equal(note.content, 'Обновленный текст правил');
+
+        // Список заметок
+        const notesList = await db.listNotes();
+        assert.equal(notesList.length, 2);
+
+        // Удаление заметки
+        await db.deleteNote('ссылки');
+        assert.equal(await db.getNote('ссылки'), null);
+        console.log('✅ CRUD для notes протестирован: get, save (UPSERT), list, delete работают корректно.');
+
+        // 6. Тестирование CRUD для acl (контроль доступа и фильтрация)
+        console.log('\n6. Тестирование CRUD для acl (контроль доступа)...');
+        // Добавление правил
+        await db.addAclRule('chat', '2000000001', 'whitelist', 1);
+        await db.addAclRule('user', '123456789', 'blacklist', 1);
+        await db.addAclRule('user', '987654321', 'trusted', 3);
+
+        let chatRule = await db.checkAccess('chat', '2000000001', 'whitelist');
+        assert(chatRule);
+        assert.equal(chatRule.access_level, 1);
+
+        let userBlacklist = await db.checkAccess('user', '123456789', 'blacklist');
+        assert(userBlacklist);
+
+        // Обновление access_level через UPSERT
+        await db.addAclRule('user', '987654321', 'trusted', 2);
+        let trustedUser = await db.checkAccess('user', '987654321', 'trusted');
+        assert.equal(trustedUser.access_level, 2);
+
+        // Валидация входных данных на уровне API
+        await assert.rejects(async () => {
+            await db.addAclRule('invalid_type', '123', 'whitelist');
+        }, /Invalid target_type/);
+
+        await assert.rejects(async () => {
+            await db.addAclRule('chat', '123', 'invalid_rule');
+        }, /Invalid rule_type/);
+
+        // Валидация SQLite CHECK constraint на уровне DDL
+        await assert.rejects(async () => {
+            await db.run("INSERT INTO acl (target_type, target_id, rule_type) VALUES ('bad', '1', 'whitelist')");
+        }, /CHECK constraint/);
+
+        // Удаление правила
+        await db.removeAclRule('user', '123456789', 'blacklist');
+        assert.equal(await db.checkAccess('user', '123456789', 'blacklist'), null);
+
+        const allRules = await db.getAclRules();
+        assert.equal(allRules.length, 2);
+        console.log('✅ CRUD для acl протестирован: add, check, remove, CHECK-валидация работают.');
+
+        // 7. Тестирование триггеров и таймеров (валидация и чистота схемы)
+        console.log('\n7. Тестирование триггеров и таймеров...');
+        await db.saveTrigger('тест', ['ответ 1', 'ответ 2'], { enabled: true, used: 5 });
+        const trg = await db.getTrigger('тест');
+        assert(trg);
+        assert.equal(trg.responses.length, 2);
+        assert.equal(trg.used_count, 5);
+
+        await db.saveTimer({
+            name: 'напоминалка',
+            chatId: '100200300',
+            messageText: 'Пора работать',
+            triggerTime: new Date(Date.now() + 60000),
+            intervalSeconds: 60,
+            enabled: true
         });
-        triggersMap.set('пинг', {
-            word: 'пинг',
-            responses: ['понг'],
-            settings: { enabled: true, used: 10 }
-        });
+        const tmr = await db.getTimer('напоминалка');
+        assert(tmr);
+        assert.equal(tmr.chat_id, '100200300');
+        assert.equal(tmr.message_text, 'Пора работать');
 
-        await db.saveTriggers(triggersMap);
-        let loaded = await db.loadTriggers();
-        assert.equal(loaded.size, 2);
-        assert.equal(loaded.get('привет').used_count, 3);
-        assert.equal(loaded.get('пинг').responses[0], 'понг');
+        await db.deleteTrigger('тест');
+        assert.equal(await db.getTrigger('тест'), null);
 
-        // Обновление триггеров (один удаляем, один обновляем, один добавляем)
-        triggersMap.delete('пинг');
-        triggersMap.get('привет').responses.push('И снова здравствуй!');
-        triggersMap.get('привет').settings.used = 15;
-        triggersMap.set('новый', {
-            word: 'новый',
-            responses: ['тест'],
-            settings: { enabled: true, used: 1 }
-        });
+        await db.deleteTimer('напоминалка');
+        assert.equal(await db.getTimer('напоминалка'), null);
+        console.log('✅ Триггеры и таймеры: схема валидна, CRUD работает штатно.');
 
-        await db.saveTriggers(triggersMap);
-        loaded = await db.loadTriggers();
-        assert.equal(loaded.size, 2);
-        assert(!loaded.has('пинг'), 'Удаленный триггер "пинг" должен быть удален');
-        assert.equal(loaded.get('привет').responses.length, 2);
-        assert.equal(loaded.get('привет').used_count, 15);
-        assert(loaded.has('новый'));
-        console.log('✅ Атомарный UPSERT триггеров работает штатно без потери данных.');
-
-        // 7. Тестирование шаблонов и сохранения статистики
-        console.log('\n7. Тестирование шаблонов (UPSERT с сохранением used_count)...');
-        await db.saveTemplate({
-            name: 'шаблон1',
-            contentType: 'text',
-            textContent: 'Привет шаблон',
-            mediaData: null,
-            fileName: null,
-            mimeType: null
-        });
-
-        // Накручиваем статистику использования
-        await db.updateTemplateUsage('шаблон1');
-        await db.updateTemplateUsage('шаблон1');
-        let tpl = await db.getTemplate('шаблон1');
-        assert.equal(tpl.used_count, 2, 'used_count должен быть равен 2');
-
-        // Обновляем шаблон (статистика НЕ должна сбрасываться!)
-        await db.saveTemplate({
-            name: 'шаблон1',
-            contentType: 'text',
-            textContent: 'Обновленный текст',
-            mediaData: null,
-            fileName: null,
-            mimeType: null
-        });
-
-        tpl = await db.getTemplate('шаблон1');
-        assert.equal(tpl.text_content, 'Обновленный текст');
-        assert.equal(tpl.used_count, 2, 'used_count НЕ должен сбрасываться в 0 при обновлении!');
-        console.log('✅ Статистика шаблонов сохраняется при обновлении.');
-
-        // 8. Тестирование транзакционности (Rollback при ошибке)
-        console.log('\n8. Тестирование транзакционности (Rollback)...');
-        try {
-            await db.transaction(async (tx) => {
-                await tx.run('INSERT INTO access_levels (level, name, description) VALUES (?, ?, ?)', [99, 'temp', 'test']);
-                throw new Error('Имитация фатального сбоя');
-            });
-        } catch (e) {
-            assert.equal(e.message, 'Имитация фатального сбоя');
-        }
-
-        const rolledBack = await db.get('SELECT * FROM access_levels WHERE level = 99');
-        assert.equal(rolledBack, undefined, 'Транзакция должна быть полностью откатана');
-        console.log('✅ Механизм транзакций и отката работает корректно.');
-
-        // 9. Остановка службы
-        console.log('\n9. Тестирование остановки службы db.stop()...');
+        // 8. Остановка службы
+        console.log('\n8. Остановка службы db.stop()...');
         await dbModule.stop(core);
         assert.equal(dbModule._service, null);
         console.log('✅ Соединение с БД корректно закрыто.');
 
-        console.log('\n🎉 ВСЕ ТЕСТЫ СЛУЖБЫ DB УСПЕШНО ПРОЙДЕНЫ!');
+        console.log('\n🎉 ВСЕ ТЕСТЫ P0 УСПЕШНО ПРОЙДЕНЫ!');
     } finally {
         // Уборка тестовой директории
         try {

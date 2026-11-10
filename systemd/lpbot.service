@@ -1,0 +1,23 @@
+[Unit]
+Description=LP-bot - Automation and Telegram/VK Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/lpbot
+ExecStart=/usr/bin/node /opt/lpbot/main.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lpbot
+Environment=NODE_ENV=production
+
+# Security sandbox
+LimitNOFILE=65535
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

@@ -54,6 +54,28 @@ class MessagingService {
         }
     }
 
+    async sendResponse(chatId, messageId, text, options = {}) {
+        let mode = options.responseMode;
+        if (!mode && this.core) {
+            try {
+                const settings = this.core.get('settings');
+                if (settings && typeof settings.get === 'function') {
+                    mode = settings.get('responseMode', 'edit');
+                }
+            } catch {}
+        }
+        mode = mode || 'edit';
+
+        if (mode === 'edit' && messageId) {
+            return await this.editMessage(chatId, messageId, text);
+        } else {
+            return await this.sendMessage(chatId, text, {
+                replyTo: messageId,
+                ...options
+            });
+        }
+    }
+
     async safeDelete(chatId, messageId) {
         const client = this.client;
         if (!client) return false;

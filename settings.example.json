@@ -1,5 +1,7 @@
 {
-  "prefix": "‘",
+  "prefix": "!",
+  "responseMode": "edit",
+  "allowMultiPrefix": false,
   "notifications": false,
   "autoStatus": true,
   "autoStatusSettings": {

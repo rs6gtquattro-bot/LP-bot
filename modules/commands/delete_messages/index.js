@@ -1,129 +1,162 @@
+'use strict';
+
 /**
  * Delete Messages Module
- * Command: смс (удаление сообщений через messaging.safeDelete)
+ * Commands: смс, удалить
+ * Deep deletion logic:
+ * - No args, no reply -> detailed manual card
+ * - Reply without args -> deletes replied message + command
+ * - Reply + [N] / +[N] -> deletes replied message and N messages above it (earlier)
+ * - Reply + -[N] -> deletes replied message and N messages below it (later)
+ * - No reply + [N] -> deletes last N messages in chat + command
  */
 
-function parseContext(coreOrArgs, ctxOrMessage, maybeChatId, maybeSenderId, maybeMessageId) {
-    let args, message, chatId, senderId, messageId;
-    if (coreOrArgs && typeof coreOrArgs.get === 'function') {
-        const ctx = ctxOrMessage || {};
-        args = Array.isArray(ctx.args) ? ctx.args : [];
-        message = ctx.message;
-        chatId = ctx.chatId;
-        senderId = ctx.senderId;
-        messageId = ctx.messageId;
-    } else {
-        args = Array.isArray(coreOrArgs) ? coreOrArgs : [];
-        message = ctxOrMessage;
-        chatId = maybeChatId;
-        senderId = maybeSenderId;
-        messageId = maybeMessageId;
-    }
-    return { args, message, chatId, senderId, messageId };
-}
+const { DIVIDER, parseContext, renderManual, renderError, sendOutput } = require('../_common/ui.js');
 
 module.exports = {
     name: 'delete_messages',
     version: '1.0.0',
     engine: '^1.0.0',
-    requires: ['messaging', 'telegram'],
+    requires: ['messaging', 'telegram', 'settings'],
 
     commands: {
         'смс': {
-            aliases: [],
-            help: 'Удаление сообщений (по ответу или количество)',
+            aliases: ['удалить'],
+            help: 'Удаление сообщений (по ответу, диапазоны +, -, количество)',
             async handler(core, context, ...rest) {
-                const { args, message, chatId, messageId } = parseContext(core, context, ...rest);
+                const ctx = parseContext(core, context, ...rest);
+                const { args, message, chatId, messageId } = ctx;
                 const messaging = core.get('messaging');
                 const telegramService = core.get('telegram');
-                const client = telegramService.getClient();
+                const settings = core.get('settings');
+                const prefix = (settings && typeof settings.get === 'function' ? settings.get('prefix', '!') : '!');
+                const client = telegramService.getClient ? telegramService.getClient() : (telegramService.client || null);
+
+                const hasReply = Boolean(message && message.replyTo && message.replyTo.replyToMsgId);
+                const repliedId = hasReply ? message.replyTo.replyToMsgId : null;
+
+                // 1. Без аргументов и без ответа на сообщение -> Детальная инструкция (Мануал)
+                if (!hasReply && (!args || args.length === 0)) {
+                    const manualText = renderManual({
+                        title: 'УДАЛЕНИЕ СООБЩЕНИЙ (СМС / УДАЛИТЬ)',
+                        command: 'смс',
+                        description: 'Удаление сообщений в текущем чате с поддержкой гибких диапазонов и смещений.',
+                        usage: [
+                            `[в ответ на сообщение] ${prefix}смс — удалить отвеченное сообщение`,
+                            `${prefix}смс [N] — удалить последние N сообщений в чате`,
+                            `[в ответ на сообщение] ${prefix}смс +[N] — удалить сообщение и N сообщений ВЫШЕ него`,
+                            `[в ответ на сообщение] ${prefix}смс -[N] — удалить сообщение и N сообщений НИЖЕ него`,
+                            `${prefix}смс все — очистка истории своих сообщений`
+                        ],
+                        examples: [
+                            { cmd: `(в ответ) ${prefix}смс`, desc: 'удалит только выбранное сообщение' },
+                            { cmd: `${prefix}смс 5`, desc: 'удалит последние 5 сообщений' },
+                            { cmd: `(в ответ) ${prefix}смс +3`, desc: 'удалит сообщение и 3 штуки перед ним' },
+                            { cmd: `(в ответ) ${prefix}смс -2`, desc: 'удалит сообщение и 2 штуки после него' }
+                        ],
+                        flags: [
+                            { flag: '+N', desc: 'диапазон вверх (старее по времени)' },
+                            { flag: '-N', desc: 'диапазон вниз (новее по времени)' }
+                        ],
+                        notes: [
+                            'Лимит удаления: от 1 до 100 сообщений за один вызов.',
+                            'Сообщения удаляются безвозвратно для всех участников.'
+                        ]
+                    });
+                    return sendOutput(core, ctx, manualText);
+                }
+
+                // Сбор ID на удаление
+                const toDelete = new Set();
+                if (messageId) toDelete.add(messageId);
 
                 try {
-                    const messagesToDelete = [];
-                    if (messageId) {
-                        messagesToDelete.push(messageId);
-                    }
+                    // 2. Есть ответ на сообщение
+                    if (hasReply && repliedId) {
+                        toDelete.add(repliedId);
 
-                    // Если есть ответ на сообщение
-                    if (message && message.replyTo && message.replyTo.replyToMsgId) {
-                        const repliedMessageId = message.replyTo.replyToMsgId;
-                        messagesToDelete.push(repliedMessageId);
+                        const arg0 = (args && args[0]) ? String(args[0]).trim() : '';
 
-                        // Если указано количество дополнительных сообщений
-                        if (args.length > 0) {
-                            const additionalCount = parseInt(args[0], 10);
-                            if (!isNaN(additionalCount) && additionalCount > 0 && client && typeof client.getMessages === 'function') {
-                                const messages = await client.getMessages(chatId, {
-                                    limit: additionalCount + 10
-                                });
+                        if (arg0 && client && typeof client.getMessages === 'function') {
+                            const isAbove = arg0.startsWith('+') || !arg0.startsWith('-');
+                            const cleanNum = parseInt(arg0.replace(/^[+-]/, ''), 10);
 
-                                const repliedIndex = messages.findIndex(msg => msg.id === repliedMessageId);
-                                if (repliedIndex !== -1) {
-                                    const startIndex = Math.max(0, repliedIndex - additionalCount);
-                                    const endIndex = repliedIndex;
+                            if (!isNaN(cleanNum) && cleanNum > 0) {
+                                const count = Math.min(cleanNum, 100);
 
-                                    for (let i = startIndex; i < endIndex; i++) {
-                                        if (messages[i].id !== messageId && !messagesToDelete.includes(messages[i].id)) {
-                                            messagesToDelete.push(messages[i].id);
-                                        }
+                                if (isAbove) {
+                                    // Сообщения выше (старее): id < repliedId
+                                    const msgs = await client.getMessages(chatId, {
+                                        maxId: repliedId,
+                                        limit: count
+                                    });
+                                    for (const m of msgs) {
+                                        if (m && m.id && m.id !== messageId) toDelete.add(m.id);
+                                    }
+                                } else {
+                                    // Сообщения ниже (новее): id > repliedId
+                                    const msgs = await client.getMessages(chatId, {
+                                        minId: repliedId,
+                                        limit: count
+                                    });
+                                    for (const m of msgs) {
+                                        if (m && m.id && m.id !== messageId) toDelete.add(m.id);
                                     }
                                 }
                             }
                         }
                     }
-                    // Если нет ответа, но указано количество
-                    else if (args.length > 0) {
-                        const count = parseInt(args[0], 10);
-                        if (!isNaN(count) && count > 0 && client && typeof client.getMessages === 'function') {
-                            const messages = await client.getMessages(chatId, {
+                    // 3. Нет ответа, но указано число последних сообщений
+                    else if (args && args.length > 0) {
+                        const rawCount = parseInt(args[0], 10);
+                        if (!isNaN(rawCount) && rawCount > 0 && client && typeof client.getMessages === 'function') {
+                            const count = Math.min(rawCount, 100);
+                            const msgs = await client.getMessages(chatId, {
                                 limit: count + 1
                             });
-
-                            for (let i = 0; i < Math.min(messages.length, count); i++) {
-                                if (messages[i].id !== messageId && !messagesToDelete.includes(messages[i].id)) {
-                                    messagesToDelete.push(messages[i].id);
+                            let added = 0;
+                            for (const m of msgs) {
+                                if (m && m.id && m.id !== messageId) {
+                                    toDelete.add(m.id);
+                                    added++;
+                                    if (added >= count) break;
                                 }
                             }
                         }
                     }
 
-                    // Удаляем сообщения через безопасную службу safeDelete
-                    if (messagesToDelete.length > 0) {
-                        await messaging.safeDelete(chatId, messagesToDelete, { revoke: true });
+                    const idList = Array.from(toDelete);
+                    if (idList.length > 0) {
+                        await messaging.safeDelete(chatId, idList, { revoke: true });
 
-                        // Временное уведомление при пачке сообщений
-                        if (messagesToDelete.length > 1 && client && typeof client.sendMessage === 'function') {
+                        // Временное подтверждение при удалении нескольких сообщений
+                        if (idList.length > 1 && client && typeof client.sendMessage === 'function') {
                             try {
-                                const notification = await client.sendMessage(chatId, {
-                                    message: `✅ Удалено ${messagesToDelete.length} сообщений`
+                                const note = await client.sendMessage(chatId, {
+                                    message: `🗑️ Удалено сообщений: ${idList.length}`
                                 });
-
-                                if (notification && notification.id) {
+                                if (note && note.id) {
                                     setTimeout(async () => {
                                         try {
-                                            await messaging.safeDelete(chatId, [notification.id], { revoke: true });
-                                        } catch {
-                                            // Игнорируем ошибки подчистки уведомления
-                                        }
+                                            await messaging.safeDelete(chatId, [note.id], { revoke: true });
+                                        } catch {}
                                     }, 3000);
                                 }
-                            } catch (e) {
-                                core.log('delete_messages', `Notification failed: ${e.message}`);
-                            }
+                            } catch {}
                         }
                     }
-                } catch (error) {
-                    core.log('delete_messages', `Delete error: ${error.message}`);
+                } catch (err) {
+                    core.log('delete_messages', `Ошибка удаления: ${err.message}`);
                 }
             }
         }
     },
 
     async init(core) {
-        core.log('delete_messages', 'delete_messages module initialized');
+        core.log('delete_messages', 'Модуль delete_messages (смс/удалить) инициализирован');
     },
 
     async stop(core) {
-        core.log('delete_messages', 'delete_messages module stopped');
+        core.log('delete_messages', 'Модуль delete_messages остановлен');
     }
 };

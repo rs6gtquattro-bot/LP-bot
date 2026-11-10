@@ -3,7 +3,7 @@ const path = require('path');
 const { TelegramClient } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const { NewMessage } = require('telegram/events');
-const { useWebTelegramDCs, webClientParams } = require('../../../tg_web_dc.js');
+const { useWebTelegramDCs, webClientParams, parseTelegramProxy } = require('../../../tg_web_dc.js');
 
 class TelegramService {
     constructor(core, options = {}) {
@@ -29,7 +29,8 @@ class TelegramService {
 
         const apiId = process.env.TELEGRAM_API_ID || fileConfig.telegramApiId;
         const apiHash = process.env.TELEGRAM_API_HASH || fileConfig.telegramApiHash || '';
-        return { apiId: apiId ? Number(apiId) : null, apiHash };
+        const proxy = process.env.TELEGRAM_PROXY || fileConfig.telegramProxy || (fileConfig.telegram && fileConfig.telegram.proxy) || '';
+        return { apiId: apiId ? Number(apiId) : null, apiHash, proxy };
     }
 
     async initClient(customClient = null) {
@@ -42,18 +43,22 @@ class TelegramService {
         const sessionString = sessionService.loadSession() || '';
         const stringSession = new StringSession(sessionString);
 
-        const { apiId, apiHash } = this.getConfig();
+        const { apiId, apiHash, proxy } = this.getConfig();
         if (!apiId || !apiHash) {
             this.core.log('telegram', 'API ID или API Hash не установлены, клиент в offline-режиме');
             return null;
         }
 
-        this.client = new TelegramClient(stringSession, apiId, apiHash, {
+        const tgProxy = parseTelegramProxy(proxy);
+        const clientOptions = {
             ...webClientParams,
             connectionRetries: 3,
             autoReconnect: true,
-            floodSleepThreshold: 60
-        });
+            floodSleepThreshold: 60,
+            ...(tgProxy ? { proxy: tgProxy, useWSS: undefined, networkSocket: undefined, connection: undefined } : {})
+        };
+
+        this.client = new TelegramClient(stringSession, apiId, apiHash, clientOptions);
 
         useWebTelegramDCs(this.client);
         return this.client;

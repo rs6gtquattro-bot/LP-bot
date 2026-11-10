@@ -1,6 +1,7 @@
 {
   "telegramApiId": 0,
   "telegramApiHash": "",
+  "telegramProxy": "",
   "panelHost": "127.0.0.1",
   "panelPort": 3005,
   "panelToken": "",
