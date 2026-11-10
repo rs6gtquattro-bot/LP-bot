@@ -253,7 +253,9 @@ test('module directories are leaves; nested helper index.js not auto-loaded', as
     fixture(root, 'core/module/helper', 'helper', `init() { throw new Error('must not run'); }`);
     const elsewhere = temp();
     fixture(elsewhere, 'external', 'external');
-    fs.symlinkSync(path.join(elsewhere, 'external'), path.join(root, 'symlink-module'), 'dir');
+    try {
+        fs.symlinkSync(path.join(elsewhere, 'external'), path.join(root, 'symlink-module'), process.platform === 'win32' ? 'junction' : 'dir');
+    } catch {}
     await core.loadModules(root);
     assert.deepEqual(names(core.modules.loaded), ['module']);
     assert.equal(core.modules.disabled.size, 0);
@@ -300,12 +302,12 @@ test('CLI entry initializes engine and delegates once even with a failed module 
     assert.equal(context.process.exitCode, undefined);
     assert.equal(require.cache[require.resolve('../script.js')], undefined);
 });
-test('main.js <=200 lines; legacy package entry/start preserved', () => {
+test('main.js <=200 lines; modular package entry/start preserved', () => {
     const source = fs.readFileSync(path.join(__dirname, '../main.js'), 'utf8');
     assert(source.trimEnd().split('\n').length <= 200);
     const pkg = require('../package.json');
-    assert.equal(pkg.main, 'script.js');
-    assert.equal(pkg.scripts.start, 'node script.js');
+    assert.equal(pkg.main, 'main.js');
+    assert.equal(pkg.scripts.start, 'node main.js');
     assert.match(fs.readFileSync(path.join(__dirname, '../start.bat'), 'utf8'), /^node main\.js\r?\npause/);
 });
 

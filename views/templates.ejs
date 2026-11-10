@@ -10,9 +10,15 @@
     <div class="container">
         <header>
             <h1>📁 Управление шаблонами</h1>
-            <div class="status">
-                <span class="status-indicator connected"></span>
-                <span>Бот активен</span>
+            <div class="network-statuses">
+                <div class="status-badge" id="tgBadge" title="Telegram Client">
+                    <span class="status-indicator connected" id="tgStatusIndicator"></span>
+                    <span id="tgStatusText">TG: Активен</span>
+                </div>
+                <div class="status-badge" id="vkBadge" title="VK Client & Tunnel">
+                    <span class="status-indicator state-disabled" id="vkStatusIndicator"></span>
+                    <span id="vkStatusText">VK: Не настроен</span>
+                </div>
             </div>
         </header>
 
@@ -170,26 +176,39 @@
             const template = data.templates.find(t => t.name === name);
             
             const infoContainer = document.getElementById('templateInfo');
-            if (template) {
-                infoContainer.innerHTML = `
-                    <div class="template-details">
-                        <h4>📋 Информация о шаблоне "${template.name}"</h4>
-                        <div class="details-grid">
-                            <div class="detail-item">
-                                <span class="detail-label">Тип:</span>
-                                <span class="detail-value">${getTemplateTypeIcon(template.content_type)} ${getTemplateTypeName(template.content_type)}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Использован:</span>
-                                <span class="detail-value">${template.used_count || 0} раз</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">Последнее использование:</span>
-                                <span class="detail-value">${template.last_used ? new Date(template.last_used).toLocaleString('ru-RU') : 'Никогда'}</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
+            if (template && infoContainer) {
+                infoContainer.replaceChildren();
+
+                const details = document.createElement('div');
+                details.className = 'template-details';
+
+                const h4 = document.createElement('h4');
+                h4.textContent = `📋 Информация о шаблоне "${template.name}"`;
+                details.appendChild(h4);
+
+                const grid = document.createElement('div');
+                grid.className = 'details-grid';
+
+                const makeItem = (label, val) => {
+                    const item = document.createElement('div');
+                    item.className = 'detail-item';
+                    const sLabel = document.createElement('span');
+                    sLabel.className = 'detail-label';
+                    sLabel.textContent = label;
+                    const sVal = document.createElement('span');
+                    sVal.className = 'detail-value';
+                    sVal.textContent = val;
+                    item.appendChild(sLabel);
+                    item.appendChild(sVal);
+                    return item;
+                };
+
+                grid.appendChild(makeItem('Тип:', `${getTemplateTypeIcon(template.content_type)} ${getTemplateTypeName(template.content_type)}`));
+                grid.appendChild(makeItem('Использован:', `${template.used_count || 0} раз`));
+                grid.appendChild(makeItem('Последнее использование:', template.last_used ? new Date(template.last_used).toLocaleString('ru-RU') : 'Никогда'));
+
+                details.appendChild(grid);
+                infoContainer.appendChild(details);
                 infoContainer.style.display = 'block';
             } else {
                 dashboard.showNotification('Шаблон не найден', 'error');

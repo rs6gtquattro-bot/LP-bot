@@ -39,23 +39,91 @@ header h1 {
     font-weight: 600;
 }
 
-.status {
+.status,
+.network-statuses {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-weight: 500;
+}
+
+.status-badge {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-weight: 500;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    font-size: 0.875rem;
+    color: #2d3748;
+    transition: all 0.2s ease;
+}
+
+.status-badge:hover {
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .status-indicator {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #e53e3e;
+    background: #a0aec0;
+    transition: all 0.3s ease;
+}
+
+.status-indicator.connected,
+.status-indicator.state-connected {
+    background: #38a169;
+    box-shadow: 0 0 8px rgba(56, 161, 105, 0.6);
     animation: pulse 2s infinite;
 }
 
-.status-indicator.connected {
-    background: #38a169;
+.status-indicator.state-warning {
+    background: #d69e2e;
+    box-shadow: 0 0 8px rgba(214, 158, 46, 0.6);
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.state-error {
+    background: #e53e3e;
+    box-shadow: 0 0 8px rgba(229, 62, 62, 0.6);
+}
+
+.status-indicator.state-disabled {
+    background: #a0aec0;
+    box-shadow: none;
+    animation: none;
+}
+
+.form-feedback {
+    font-size: 0.8125rem;
+    margin-top: 0.25rem;
+    font-weight: 500;
+}
+
+.form-feedback.valid {
+    color: #38a169;
+}
+
+.form-feedback.invalid {
+    color: #e53e3e;
+}
+
+.form-control.is-valid {
+    border-color: #38a169;
+    box-shadow: 0 0 0 1px #38a169;
+}
+
+.form-control.is-invalid {
+    border-color: #e53e3e;
+    box-shadow: 0 0 0 1px #e53e3e;
+}
+
+.stat-card.vk-theme {
+    background: linear-gradient(135deg, #0077ff 0%, #0055cc 100%);
+    color: white;
 }
 
 @keyframes pulse {

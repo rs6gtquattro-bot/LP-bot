@@ -10,9 +10,15 @@
     <div class="container">
         <header>
             <h1>📈 Статистика бота</h1>
-            <div class="status">
-                <span class="status-indicator connected"></span>
-                <span>Бот активен</span>
+            <div class="network-statuses">
+                <div class="status-badge" id="tgBadge" title="Telegram Client">
+                    <span class="status-indicator connected" id="tgStatusIndicator"></span>
+                    <span id="tgStatusText">TG: Активен</span>
+                </div>
+                <div class="status-badge" id="vkBadge" title="VK Client & Tunnel">
+                    <span class="status-indicator state-disabled" id="vkStatusIndicator"></span>
+                    <span id="vkStatusText">VK: Не настроен</span>
+                </div>
             </div>
         </header>
 
@@ -64,6 +70,14 @@
                         <div class="stat-label">Таймеров</div>
                     </div>
                 </div>
+
+                <div class="stat-card vk-theme">
+                    <div class="stat-icon">🔷</div>
+                    <div class="stat-content">
+                        <div class="stat-number" id="vkEventsCount">0</div>
+                        <div class="stat-label">VK LP событий</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Системная информация -->
@@ -83,6 +97,14 @@
                         <span class="info-value">
                             <%= connection ? '✅ Подключено' : '❌ Отключено' %>
                         </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">VK Long Poll:</span>
+                        <span class="info-value" id="vkStatusDetail">Опрос...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">VK Транспорт:</span>
+                        <span class="info-value">SSH-туннель (127.0.0.1:1080)</span>
                     </div>
                     <div class="info-row">
                         <span class="info-label">Версия Node.js:</span>

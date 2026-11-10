@@ -1,13 +1,22 @@
 const express = require('express');
 const path = require('path');
 const WebSocket = require('ws');
+const crypto = require('crypto');
 
 const LOG_LIMIT = 500;
+
+function safeCompare(a, b) {
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+}
 
 class WebInterface {
     // host: адрес, на котором слушает панель. По умолчанию только локальная петля 127.0.0.1,
     // наружу панель открывается только явно через panelHost в config.json.
-    constructor(bot, db, port = 3001, host = '127.0.0.1') {
+    constructor(bot, db, port = 3001, host = '127.0.0.1', token = null) {
         this.bot = bot;
         this.db = db || (bot && bot.db);
         this.port = port;
@@ -15,6 +24,15 @@ class WebInterface {
         this.server = null;
         this.wss = null;
         this.logs = [];
+
+        // Токен авторизации панели управления (Bearer / Cookie / Query)
+        this.token = token || (bot && (bot.panelToken || (bot.config && bot.config.panelToken))) || process.env.PANEL_TOKEN;
+        if (!this.token) {
+            this.token = crypto.randomBytes(32).toString('hex');
+        }
+        if (this.bot) {
+            this.bot.panelToken = this.token;
+        }
 
         this.captureConsole();
 
@@ -44,8 +62,82 @@ class WebInterface {
         this.app.set('view engine', 'ejs');
         this.app.set('views', path.join(__dirname, 'views'));
 
+        // Заголовки безопасности: CSP, X-Frame-Options, X-Content-Type-Options
+        this.app.use((req, res, next) => {
+            res.setHeader(
+                'Content-Security-Policy',
+                "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; img-src 'self' data:; frame-ancestors 'none';"
+            );
+            res.setHeader('X-Frame-Options', 'DENY');
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            next();
+        });
+
+        // Статика стилей до авторизации (для отображения страницы 401 и favicon)
+        this.app.use('/css', express.static(path.join(__dirname, 'public/css')));
+
         this.app.use(express.json());
         this.app.use(express.urlencoded({ extended: true }));
+
+        // 1. Защита от CSRF: проверка Origin для мутирующих запросов
+        this.app.use((req, res, next) => {
+            if (['POST', 'DELETE', 'PUT', 'PATCH'].includes(req.method)) {
+                const origin = req.headers['origin'];
+                const host = req.headers['host'];
+                if (origin) {
+                    try {
+                        const originHost = new URL(origin).host;
+                        if (originHost !== host && originHost !== `127.0.0.1:${this.port}` && originHost !== `localhost:${this.port}`) {
+                            console.warn(`⛔ [SECURITY CSRF] Отклонён запрос с чужого Origin: ${origin} (Host: ${host})`);
+                            return res.status(403).json({ success: false, message: 'Forbidden: invalid origin (CSRF protection)' });
+                        }
+                    } catch (e) {
+                        return res.status(403).json({ success: false, message: 'Forbidden: malformed origin' });
+                    }
+                }
+            }
+            next();
+        });
+
+        // 2. Авторизация по Bearer-токену, cookie и query параметру
+        this.app.use((req, res, next) => {
+            const authHeader = req.headers['authorization'];
+            const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+
+            const cookieHeader = req.headers['cookie'] || '';
+            const cookieToken = cookieHeader.split(';').map(c => c.trim()).find(c => c.startsWith('lp_auth_token='))?.split('=')[1];
+
+            const queryToken = req.query.token ? String(req.query.token).trim() : null;
+
+            const incomingToken = bearerToken || cookieToken || queryToken;
+
+            if (incomingToken && safeCompare(incomingToken, this.token)) {
+                if (queryToken) {
+                    res.setHeader('Set-Cookie', `lp_auth_token=${this.token}; Path=/; HttpOnly; SameSite=Strict`);
+                }
+                return next();
+            }
+
+            if (req.xhr || req.path.startsWith('/api/') || (req.headers.accept && req.headers.accept.includes('application/json'))) {
+                return res.status(401).json({ success: false, message: 'Unauthorized: missing or invalid token' });
+            }
+
+            res.status(401).send(`<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <title>401 Unauthorized - lpbot</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body style="padding: 2rem; font-family: sans-serif; background: #f8fafc; color: #1e293b;">
+    <div style="max-width: 500px; margin: 3rem auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
+        <h2>🔒 Доступ ограничен</h2>
+        <p>Для доступа к веб-панели управления требуется авторизационный токен.</p>
+        <p>Используйте ссылку для входа из консоли бота:<br><code>http://${this.host}:${this.port}/?token=ВАШ_ТОКЕН</code></p>
+    </div>
+</body>
+</html>`);
+        });
 
         this.app.use(express.static(path.join(__dirname, 'public')));
     }
@@ -71,6 +163,28 @@ class WebInterface {
             console.error('❌ Ошибка загрузки шаблонов:', error.message);
             return [];
         }
+    }
+
+    getVkStatus() {
+        if (!this.bot || !this.bot.vkClient) {
+            return { state: 'disabled', text: 'Не настроен', detail: 'Модуль VK не загружен', connected: false };
+        }
+        const vk = this.bot.vkClient;
+        const s = vk.status || {};
+        if (!vk.token && !vk.running) {
+            return { state: 'disabled', text: 'Не настроен', detail: 'Токен VK не задан', connected: false };
+        }
+        if (vk.running && s.connected) {
+            return { state: 'connected', text: 'Активен', detail: 'Long Poll подключен • Туннель :1080 OK', connected: true };
+        }
+        if (vk.running && (vk.captchaStreak > 0 || (s.errors > 0 && !s.connected))) {
+            const detail = vk.captchaStreak > 0 ? 'Пауза: капча-бэкофф' : 'Ожидание Long Poll...';
+            return { state: 'warning', text: 'Переподключение', detail, connected: false };
+        }
+        if (vk.running && !s.connected) {
+            return { state: 'error', text: 'Сбой соединения', detail: 'Ошибка связи с VK / туннелем', connected: false };
+        }
+        return { state: 'disabled', text: 'Остановлен', detail: 'Клиент остановлен', connected: false };
     }
 
     commandsList() {
@@ -149,7 +263,10 @@ class WebInterface {
                 uptime: s.uptimeText,
                 memory: s.memoryMb,
                 triggers: s.activeTriggers,
-                connection: s.connected
+                connection: s.connected,
+                vkConnected: this.bot.vkClient ? Boolean(this.bot.vkClient.status && this.bot.vkClient.status.connected) : null,
+                vkEvents: this.bot.vkClient ? (this.bot.vkClient.status ? this.bot.vkClient.status.events : 0) : null,
+                vkStatus: this.getVkStatus()
             });
         });
 
@@ -171,7 +288,8 @@ class WebInterface {
                 nodeVersion: process.version,
                 // VK long poll: только счётчики, без текста сообщений
                 vkEvents: this.bot.vkClient ? this.bot.vkClient.status.events : null,
-                vkConnected: this.bot.vkClient ? this.bot.vkClient.status.connected : null
+                vkConnected: this.bot.vkClient ? this.bot.vkClient.status.connected : null,
+                vkStatus: this.getVkStatus()
             });
         });
 
@@ -257,9 +375,15 @@ class WebInterface {
             try {
                 const isOn = value => value === 'on' || value === true || value === 'true';
                 if (body.prefix !== undefined) {
-                    const prefix = String(body.prefix || '').trim();
-                    if (!prefix || prefix.length > 3) return res.json({ success: false, message: 'Префикс: от 1 до 3 символов' });
+                    let prefix = String(body.prefix || '').replace(/\s+/g, '');
+                    prefix = prefix.replace(/['’ʼ`]/g, '‘');
+                    if (!prefix || prefix.length > 3 || /[\p{L}\p{N}]/u.test(prefix)) {
+                        return res.json({ success: false, message: 'Префикс: от 1 до 3 спецсимволов без букв и пробелов' });
+                    }
                     s.prefix = prefix;
+                    if (this.bot.vkClient && typeof this.bot.vkClient.setPrefix === 'function') {
+                        this.bot.vkClient.setPrefix(prefix);
+                    }
                 }
                 // Форма страницы /settings шлёт только включённые галочки, остальные выключаем.
                 // GUI и прочие клиенты меняют только те флаги, которые прислали.
@@ -359,6 +483,8 @@ class WebInterface {
                 this.server = this.app.listen(this.port, this.host, (err) => {
                     if (err) return reject(err);
                     console.log(`🌐 Веб-интерфейс запущен на ${this.host}:${this.port}`);
+                    console.log(`🔑 Токен веб-панели: ${this.token}`);
+                    console.log(`🌐 Ссылка для входа: http://${this.host}:${this.port}/?token=${this.token}`);
                     resolve();
                 });
                 this.server.on('error', reject);
@@ -374,7 +500,35 @@ class WebInterface {
     }
 
     startWebSocket() {
-        this.wss = new WebSocket.Server({ server: this.server });
+        this.wss = new WebSocket.Server({
+            server: this.server,
+            verifyClient: (info, callback) => {
+                const origin = info.origin;
+                const host = info.req.headers.host;
+                if (origin) {
+                    try {
+                        const originHost = new URL(origin).host;
+                        if (originHost !== host && originHost !== `127.0.0.1:${this.port}` && originHost !== `localhost:${this.port}`) {
+                            console.warn(`⛔ [SECURITY CSWSH] WebSocket отклонён: Origin ${origin} не совпадает с Host ${host}`);
+                            return callback(false, 403, 'Forbidden: Invalid Origin');
+                        }
+                    } catch (e) {
+                        return callback(false, 403, 'Forbidden: Malformed Origin');
+                    }
+                }
+                const cookieHeader = info.req.headers.cookie || '';
+                const cookieToken = cookieHeader.split(';').map(c => c.trim()).find(c => c.startsWith('lp_auth_token='))?.split('=')[1];
+                const url = new URL(info.req.url, `http://${this.host}:${this.port}`);
+                const queryToken = url.searchParams.get('token');
+                const token = queryToken || cookieToken;
+
+                if (!token || !safeCompare(token, this.token)) {
+                    console.warn('⛔ [SECURITY] WebSocket отклонён: неверный или отсутствующий токен');
+                    return callback(false, 401, 'Unauthorized');
+                }
+                callback(true);
+            }
+        });
     }
 
     stop() {

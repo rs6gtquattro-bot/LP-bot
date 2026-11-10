@@ -195,7 +195,7 @@ modules/
 module.exports = {
   name: 'qr',
   version: '1.0.0',
-  engine: '^2.0.0',
+  engine: '^1.0.0',
   requires: ['messaging', 'telegram'],
   commands: {
     'qr': { handler, help: 'QR из текста', aliases: [] }
@@ -211,7 +211,7 @@ module.exports = {
 
 ### 2.4. API ядра (`main.js`, цель — до 200 строк)
 
-`core.version` берётся из `package.json` и становится `2.0.0`.
+`core.version` берётся из `package.json` и равна `1.0.0`. Версии только X.Y.Z (`^\d+\.\d+\.\d+$`): X — релиз, Y — патчи критических уязвимостей и ошибок, Z — мелкие фиксы.
 
 - `core.provide(name, obj)` и `core.get(name)` — службы: `db`, `settings`, `telegram`, `messaging` (с `editMessage`, `safeDelete`, `splitMessage`) и так далее.
 - `core.command(name, handler, meta)` регистрирует команду. Повтор имени даёт ошибку при старте, а не тихую перезапись.

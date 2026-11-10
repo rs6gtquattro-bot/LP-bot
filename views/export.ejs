@@ -10,9 +10,15 @@
     <div class="container">
         <header>
             <h1>💾 Экспорт данных</h1>
-            <div class="status">
-                <span class="status-indicator connected"></span>
-                <span>Бот активен</span>
+            <div class="network-statuses">
+                <div class="status-badge" id="tgBadge" title="Telegram Client">
+                    <span class="status-indicator connected" id="tgStatusIndicator"></span>
+                    <span id="tgStatusText">TG: Активен</span>
+                </div>
+                <div class="status-badge" id="vkBadge" title="VK Client & Tunnel">
+                    <span class="status-indicator state-disabled" id="vkStatusIndicator"></span>
+                    <span id="vkStatusText">VK: Не настроен</span>
+                </div>
             </div>
         </header>
 

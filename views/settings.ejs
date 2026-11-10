@@ -10,9 +10,15 @@
     <div class="container">
         <header>
             <h1>⚙️ Настройки бота</h1>
-            <div class="status">
-                <span class="status-indicator connected"></span>
-                <span>Бот активен</span>
+            <div class="network-statuses">
+                <div class="status-badge" id="tgBadge" title="Telegram Client">
+                    <span class="status-indicator connected" id="tgStatusIndicator"></span>
+                    <span id="tgStatusText">TG: Активен</span>
+                </div>
+                <div class="status-badge" id="vkBadge" title="VK Client & Tunnel">
+                    <span class="status-indicator state-disabled" id="vkStatusIndicator"></span>
+                    <span id="vkStatusText">VK: Не настроен</span>
+                </div>
             </div>
         </header>
 
@@ -37,8 +43,9 @@
                     <div class="form-group">
                         <label for="prefix">Префикс команд:</label>
                         <input type="text" id="prefix" name="prefix" class="form-control" 
-                               value="<%= settings.prefix %>" maxlength="5" required>
-                        <small class="form-text">Символ, с которого начинаются команды бота</small>
+                               value="<%= settings.prefix %>" maxlength="3" autocomplete="off" spellcheck="false" required>
+                        <div id="prefixFeedback" class="form-feedback"></div>
+                        <small class="form-text">От 1 до 3 спецсимволов. Кавычки любого вида (' ‘ ’) распознаются и нормализуются автоматически.</small>
                     </div>
 
                     <div class="form-group">

@@ -10,9 +10,15 @@
     <div class="container">
         <header>
             <h1>🎯 Команды бота</h1>
-            <div class="status">
-                <span class="status-indicator connected"></span>
-                <span>Бот активен</span>
+            <div class="network-statuses">
+                <div class="status-badge" id="tgBadge" title="Telegram Client">
+                    <span class="status-indicator connected" id="tgStatusIndicator"></span>
+                    <span id="tgStatusText">TG: Активен</span>
+                </div>
+                <div class="status-badge" id="vkBadge" title="VK Client & Tunnel">
+                    <span class="status-indicator state-disabled" id="vkStatusIndicator"></span>
+                    <span id="vkStatusText">VK: Не настроен</span>
+                </div>
             </div>
         </header>
 
@@ -191,11 +197,12 @@
                 const noResultsElem = document.createElement('div');
                 noResultsElem.id = 'noResults';
                 noResultsElem.className = 'no-results';
-                noResultsElem.innerHTML = `
-                    <div style="text-align: center; padding: 2rem; color: #6b7280;">
-                        🔍 Команды не найдены для "${searchTerm}"
-                    </div>
-                `;
+                const innerMsg = document.createElement('div');
+                innerMsg.style.textAlign = 'center';
+                innerMsg.style.padding = '2rem';
+                innerMsg.style.color = '#6b7280';
+                innerMsg.textContent = `🔍 Команды не найдены для "${searchTerm}"`;
+                noResultsElem.appendChild(innerMsg);
                 document.querySelector('.commands-categories').appendChild(noResultsElem);
             }
         } else if (noResults) {

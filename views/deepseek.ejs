@@ -10,9 +10,15 @@
     <div class="container">
         <header>
             <h1>🤖 DeepSeek AI</h1>
-            <div class="status">
-                <span class="status-indicator connected"></span>
-                <span>Бот активен</span>
+            <div class="network-statuses">
+                <div class="status-badge" id="tgBadge" title="Telegram Client">
+                    <span class="status-indicator connected" id="tgStatusIndicator"></span>
+                    <span id="tgStatusText">TG: Активен</span>
+                </div>
+                <div class="status-badge" id="vkBadge" title="VK Client & Tunnel">
+                    <span class="status-indicator state-disabled" id="vkStatusIndicator"></span>
+                    <span id="vkStatusText">VK: Не настроен</span>
+                </div>
             </div>
         </header>
 
@@ -208,12 +214,6 @@
         }
     }
 
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
     async function sendTestMessage(event) {
         event.preventDefault();
         const message = document.getElementById('testMessage').value;
@@ -223,15 +223,40 @@
         const aiResponse = document.getElementById('aiResponse');
 
         testResult.style.display = 'block';
-        aiResponse.innerHTML = '<div class="loading">🤔 AI думает...</div>';
+        aiResponse.replaceChildren();
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'loading';
+        loadingDiv.textContent = '🤔 AI думает...';
+        aiResponse.appendChild(loadingDiv);
 
         try {
             const result = await callDeepSeekTest(message);
-            aiResponse.innerHTML = result.success
-                ? `<div class="ai-message"><p>${escapeHtml(result.answer)}</p><div class="message-info"><small>Модель: ${escapeHtml(result.model || '')}</small></div></div>`
-                : `<div class="error">❌ ${escapeHtml(result.message)}</div>`;
+            aiResponse.replaceChildren();
+            if (result.success) {
+                const aiMsg = document.createElement('div');
+                aiMsg.className = 'ai-message';
+                const p = document.createElement('p');
+                p.textContent = result.answer || '';
+                const info = document.createElement('div');
+                info.className = 'message-info';
+                const small = document.createElement('small');
+                small.textContent = `Модель: ${result.model || ''}`;
+                info.appendChild(small);
+                aiMsg.appendChild(p);
+                aiMsg.appendChild(info);
+                aiResponse.appendChild(aiMsg);
+            } else {
+                const errDiv = document.createElement('div');
+                errDiv.className = 'error';
+                errDiv.textContent = `❌ ${result.message || 'Ошибка'}`;
+                aiResponse.appendChild(errDiv);
+            }
         } catch (error) {
-            aiResponse.innerHTML = `<div class="error">❌ Ошибка: ${escapeHtml(error.message)}</div>`;
+            aiResponse.replaceChildren();
+            const errDiv = document.createElement('div');
+            errDiv.className = 'error';
+            errDiv.textContent = `❌ Ошибка: ${error.message}`;
+            aiResponse.appendChild(errDiv);
         }
     }
     </script>

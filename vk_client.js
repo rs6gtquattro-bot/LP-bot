@@ -30,6 +30,38 @@ class VkApiError extends Error {
     }
 }
 
+const APOSTROPHE_PREFIXES = new Set(["'", '‘', '’', 'ʼ', '`']);
+
+const HTML_ENTITIES = {
+    '&quot;': '"',
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&#39;': "'",
+    '&apos;': "'",
+    '&nbsp;': ' ',
+};
+const HTML_RE = /&(?:quot|amp|lt|gt|#39|apos|nbsp|#\d+|#x[0-9a-fA-F]+);|<br\s*\/?>/gi;
+
+function unescapeHTML(str) {
+    if (!str || typeof str !== 'string') return '';
+    if (!str.includes('&') && !str.includes('<')) return str;
+    return str.replace(HTML_RE, (match) => {
+        const lower = match.toLowerCase();
+        if (HTML_ENTITIES[lower]) return HTML_ENTITIES[lower];
+        if (lower === '<br>' || lower === '<br/>' || lower === '<br />') return '\n';
+        if (lower.startsWith('&#x')) {
+            const code = parseInt(lower.slice(3, -1), 16);
+            return !isNaN(code) && code > 0 ? String.fromCharCode(code) : match;
+        }
+        if (lower.startsWith('&#')) {
+            const code = parseInt(lower.slice(2, -1), 10);
+            return !isNaN(code) && code > 0 ? String.fromCharCode(code) : match;
+        }
+        return match;
+    });
+}
+
 class VkClient {
     // deps — для тестов: axios, createProxyAgent, now, sleep, log
     constructor(bot, config = {}, deps = {}) {
@@ -76,6 +108,9 @@ class VkClient {
         this.pollErrorStreak = 0;
         this.http = null;
         this.status = { connected: false, ts: null, lastEventAt: null, errors: 0, captchas: 0, events: 0 }; // для *вк_лп_статус
+        this.queue = [];
+        this.processingQueue = false;
+        this.drainResolvers = [];
     }
 
     // ---------- запуск ----------
@@ -100,6 +135,44 @@ class VkClient {
         this.running = false;
         this.status.connected = false;
         if (this.onlineTimer) { this.deps.clearInterval(this.onlineTimer); this.onlineTimer = null; }
+    }
+
+    enqueueMessage(msg) {
+        if (this.queue.length >= 500) {
+            if (!this.isAllowed(msg)) return;
+        }
+        this.queue.push(msg);
+        this.processQueue();
+    }
+
+    async processQueue() {
+        if (this.processingQueue) return;
+        this.processingQueue = true;
+        try {
+            while (this.queue.length > 0) {
+                const msg = this.queue.shift();
+                try {
+                    await this.handleMessage(msg);
+                } catch (e) {
+                    this.status.errors++;
+                    this.deps.log('❌ VK: ошибка обработки:', e.message);
+                }
+            }
+        } finally {
+            this.processingQueue = false;
+            if (this.queue.length === 0 && this.drainResolvers.length > 0) {
+                const resolvers = this.drainResolvers;
+                this.drainResolvers = [];
+                for (const r of resolvers) r();
+            }
+        }
+    }
+
+    drainQueue() {
+        if (this.queue.length === 0 && !this.processingQueue) return Promise.resolve();
+        return new Promise((resolve) => {
+            this.drainResolvers.push(resolve);
+        });
     }
 
     // ---------- состояние в БД ----------
@@ -225,7 +298,7 @@ class VkClient {
                         this.status.events++;
                         // только счётчик, без текста и отправителя
                         if (this.status.events === 1 || this.status.events % 100 === 0) this.deps.log(`📥 VK LP: событий ${this.status.events}`);
-                        await this.handleMessage(msg).catch((e) => { this.status.errors++; this.deps.log('❌ VK: ошибка обработки:', e.message); });
+                        this.enqueueMessage(msg);
                     }
                 }
             } catch (e) {
@@ -239,6 +312,7 @@ class VkClient {
                 await this.deps.sleep(delay);
             }
         }
+        await this.drainQueue();
     }
 
     // Событие 4 (новое сообщение) → объект как у TG (ТЗ п. 4.2).
@@ -247,7 +321,8 @@ class VkClient {
         const [, messageId, flags, peerId, , text, extra = {}] = u;
         const out = (flags & 2) === 2;
         const fromId = out ? this.ownerId : (peerId > 2000000000 ? Number(extra.from) : peerId);
-        const msg = { platform: 'vk', messageId, peerId, fromId, out, text: String(text || '') };
+        const cleanText = unescapeHTML(String(text || ''));
+        const msg = { platform: 'vk', messageId, peerId, fromId, out, text: cleanText };
         if (extra.source_act) msg.action = extra.source_act; // служебное событие беседы, например chat_screenshot
         return msg;
     }
@@ -263,6 +338,21 @@ class VkClient {
     // Вызывается при смене префикса в TG (команда префикс) и при перечитывании settings.json
     setPrefix(p) {
         if (typeof p === 'string' && p) this.config.prefix = p;
+    }
+
+    matchPrefix(text) {
+        const configured = this.config.prefix;
+        if (!configured || !text || typeof text !== 'string') return null;
+        if (APOSTROPHE_PREFIXES.has(configured)) {
+            const firstChar = text.charAt(0);
+            if (APOSTROPHE_PREFIXES.has(firstChar)) {
+                return { matched: true, length: 1, char: firstChar };
+            }
+        }
+        if (text.startsWith(configured)) {
+            return { matched: true, length: configured.length, char: configured };
+        }
+        return null;
     }
 
     // ---------- команды (ТЗ п. 5) ----------
@@ -292,8 +382,8 @@ class VkClient {
 
     async handleMessage(msg) {
         this.logToCache(msg);
-        const prefix = this.config.prefix;
-        if (!msg.text.startsWith(prefix)) {                    // ТЗ п. 5.2: без префикса команды не выполняем
+        const match = this.matchPrefix(msg.text);
+        if (!match) {                                           // ТЗ п. 5.2: без префикса команды не выполняем
             if (!msg.out) await this.handleIncoming(msg);       // защита, капча, триггеры
             return false;
         }
@@ -302,7 +392,8 @@ class VkClient {
             if (!msg.out) await this.handleIncoming(msg);
             return false;
         }
-        const body = msg.text.slice(prefix.length).trim();
+        const prefix = this.config.prefix;
+        const body = msg.text.slice(match.length).trim();
         if (!body) return false;
         const [rawName, ...args] = body.split(/\s+/);
         const name = rawName.toLowerCase();

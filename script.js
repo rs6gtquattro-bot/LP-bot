@@ -299,65 +299,83 @@ class lpbot {
 }
 
     async saveTriggersToDatabase() {
-    try {
-        console.log('💾 Сохраняем триггеры в базу данных...');
-        
-        // очищаем таб. триггеров
-        await new Promise((resolve, reject) => {
-            this.db.run(`DELETE FROM triggers`, (err) => {
-                if (err) {
-                    console.error('❌ Ошибка очистки таблицы триггеров:', err.message);
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
-        });
-        
-        // сейвим все триггеры заново в нью ск.
-        let savedCount = 0;
-        for (const [word, trigger] of this.settings.triggers) {
-            try {
-                // чекаем корректность данных триггера
-                if (!trigger || !trigger.word || !trigger.responses || !trigger.settings) {
-                    console.error('❌ Пропускаем некорректный триггер:', word);
-                    continue;
-                }
+        try {
+            console.log('💾 Сохраняем триггеры в базу данных (транзакционный UPSERT)...');
+            
+            const activeTriggers = this.settings.triggers instanceof Map
+                ? [...this.settings.triggers.values()].filter(t => t && t.word && t.responses && t.settings)
+                : [];
+            const activeWords = activeTriggers.map(t => t.word);
 
-                await new Promise((resolve, reject) => {
-                    this.db.run(
-                        `INSERT INTO triggers (word, responses, settings, used_count, last_used, created_at) 
-                         VALUES (?, ?, ?, ?, ?, ?)`,
-                        [
-                            trigger.word,
-                            JSON.stringify(trigger.responses),
-                            JSON.stringify(trigger.settings),
-                            trigger.settings.used || 0,
-                            trigger.settings.lastUsed || null,
-                            trigger.settings.created || new Date()
-                        ],
-                        (err) => {
-                            if (err) {
-                                console.error(`❌ Ошибка сохранения триггера "${trigger.word}":`, err.message);
-                                reject(err);
-                            } else {
-                                savedCount++;
-                                resolve();
+            await new Promise((resolve, reject) => {
+                this.db.serialize(() => {
+                    this.db.run('BEGIN IMMEDIATE', (beginErr) => {
+                        if (beginErr) return reject(beginErr);
+
+                        const deleteQuery = activeWords.length > 0
+                            ? `DELETE FROM triggers WHERE word NOT IN (${activeWords.map(() => '?').join(',')})`
+                            : `DELETE FROM triggers`;
+                        
+                        this.db.run(deleteQuery, activeWords, (delErr) => {
+                            if (delErr) {
+                                return this.db.run('ROLLBACK', () => reject(delErr));
                             }
-                        }
-                    );
+
+                            if (activeTriggers.length === 0) {
+                                return this.db.run('COMMIT', (commitErr) => {
+                                    if (commitErr) reject(commitErr);
+                                    else {
+                                        console.log('✅ Таблица триггеров синхронизирована (0 активных)');
+                                        resolve(0);
+                                    }
+                                });
+                            }
+
+                            const upsertSql = `
+                                INSERT INTO triggers (word, responses, settings, used_count, last_used, created_at)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                                ON CONFLICT(word) DO UPDATE SET
+                                    responses = excluded.responses,
+                                    settings = excluded.settings,
+                                    used_count = CASE WHEN excluded.used_count > triggers.used_count THEN excluded.used_count ELSE triggers.used_count END,
+                                    last_used = COALESCE(excluded.last_used, triggers.last_used)
+                            `;
+
+                            let savedCount = 0;
+                            const stmt = this.db.prepare(upsertSql);
+                            for (const trigger of activeTriggers) {
+                                stmt.run([
+                                    trigger.word,
+                                    JSON.stringify(trigger.responses),
+                                    JSON.stringify(trigger.settings),
+                                    trigger.settings.used || trigger.used_count || 0,
+                                    trigger.settings.lastUsed || trigger.last_used || null,
+                                    trigger.settings.created || trigger.created_at || new Date().toISOString()
+                                ], (stmtErr) => {
+                                    if (!stmtErr) savedCount++;
+                                });
+                            }
+
+                            stmt.finalize((finErr) => {
+                                if (finErr) {
+                                    return this.db.run('ROLLBACK', () => reject(finErr));
+                                }
+                                this.db.run('COMMIT', (commitErr) => {
+                                    if (commitErr) reject(commitErr);
+                                    else {
+                                        console.log(`✅ Сохранено ${savedCount} триггеров в базу (UPSERT)`);
+                                        resolve(savedCount);
+                                    }
+                                });
+                            });
+                        });
+                    });
                 });
-            } catch (triggerError) {
-                console.error(`❌ Ошибка обработки триггера "${word}":`, triggerError.message);
-                // продолжаем сохранение других триггеров
-            }
+            });
+        } catch (error) {
+            console.error('❌ Общая ошибка сохранения триггеров:', error.message);
         }
-        
-        console.log(`✅ Сохранено ${savedCount} триггеров в базу`);
-    } catch (error) {
-        console.error('❌ Общая ошибка сохранения триггеров:', error.message);
     }
-}
 
     async saveAllData() {
     try {
@@ -378,60 +396,92 @@ class lpbot {
 }
 
 /**
- * Сохранение всех таймеров в базу данных
+ * Сохранение всех таймеров в базу данных (транзакционный UPSERT)
  */
 async saveTimersToDatabase() {
     try {
-        console.log('💾 Сохраняем таймеры в базу данных...');
+        console.log('💾 Сохраняем таймеры в базу данных (транзакционный UPSERT)...');
         
-        // Очищаем таблицу таймеров
+        const activeTimers = this.settings.timers
+            ? [...this.settings.timers.values()].filter(t => t && t.name)
+            : [];
+        const activeNames = activeTimers.map(t => t.name);
+
         await new Promise((resolve, reject) => {
-            this.db.run(`DELETE FROM timers`, (err) => {
-                if (err) {
-                    console.error('❌ Ошибка очистки таблицы таймеров:', err.message);
-                    reject(err);
-                } else {
-                    resolve();
-                }
+            this.db.serialize(() => {
+                this.db.run('BEGIN IMMEDIATE', (beginErr) => {
+                    if (beginErr) return reject(beginErr);
+
+                    const deleteQuery = activeNames.length > 0
+                        ? `DELETE FROM timers WHERE name NOT IN (${activeNames.map(() => '?').join(',')})`
+                        : `DELETE FROM timers`;
+
+                    this.db.run(deleteQuery, activeNames, (delErr) => {
+                        if (delErr) {
+                            return this.db.run('ROLLBACK', () => reject(delErr));
+                        }
+
+                        if (activeTimers.length === 0) {
+                            return this.db.run('COMMIT', (commitErr) => {
+                                if (commitErr) reject(commitErr);
+                                else {
+                                    console.log('✅ Таблица таймеров синхронизирована (0 активных)');
+                                    resolve(0);
+                                }
+                            });
+                        }
+
+                        const upsertSql = `
+                            INSERT INTO timers (name, chat_id, message_text, trigger_time, interval_seconds, repeat_count, current_count, enabled, created_at, last_triggered, settings)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(name) DO UPDATE SET
+                                chat_id = excluded.chat_id,
+                                message_text = excluded.message_text,
+                                trigger_time = excluded.trigger_time,
+                                interval_seconds = excluded.interval_seconds,
+                                repeat_count = excluded.repeat_count,
+                                current_count = excluded.current_count,
+                                enabled = excluded.enabled,
+                                last_triggered = excluded.last_triggered,
+                                settings = excluded.settings
+                        `;
+
+                        let savedCount = 0;
+                        const stmt = this.db.prepare(upsertSql);
+                        for (const timer of activeTimers) {
+                            stmt.run([
+                                timer.name,
+                                timer.chatId,
+                                timer.messageText,
+                                timer.triggerTime instanceof Date ? timer.triggerTime.toISOString() : (timer.triggerTime || new Date().toISOString()),
+                                timer.intervalSeconds,
+                                timer.repeatCount || 0,
+                                timer.currentCount || 0,
+                                timer.enabled !== false,
+                                timer.createdAt instanceof Date ? timer.createdAt.toISOString() : (timer.createdAt || new Date().toISOString()),
+                                timer.lastTriggered instanceof Date ? timer.lastTriggered.toISOString() : (timer.lastTriggered || null),
+                                JSON.stringify(timer.settings || {})
+                            ], (stmtErr) => {
+                                if (!stmtErr) savedCount++;
+                            });
+                        }
+
+                        stmt.finalize((finErr) => {
+                            if (finErr) {
+                                return this.db.run('ROLLBACK', () => reject(finErr));
+                            }
+                            this.db.run('COMMIT', (commitErr) => {
+                                if (commitErr) reject(commitErr);
+                                else {
+                                    console.log(`✅ Сохранено ${savedCount} таймеров в базу (UPSERT)`);
+                                    resolve(savedCount);
+                                }
+                            });
+                        });
+                    });
+                });
             });
         });
-        
-        // Сохраняем все активные таймеры
-        let savedCount = 0;
-        for (const [name, timer] of this.settings.timers) {
-            try {
-                await new Promise((resolve, reject) => {
-                    this.db.run(
-                        `INSERT INTO timers (name, chat_id, message_text, trigger_time, interval_seconds, repeat_count, current_count, enabled, created_at, last_triggered, settings) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [
-                            timer.name,
-                            timer.chatId,
-                            timer.messageText,
-                            timer.triggerTime.toISOString(),
-                            timer.intervalSeconds,
-                            timer.repeatCount,
-                            timer.currentCount,
-                            timer.enabled,
-                            timer.createdAt.toISOString(),
-                            timer.lastTriggered ? timer.lastTriggered.toISOString() : null,
-                            JSON.stringify(timer.settings)
-                        ],
-                        (err) => {
-                            if (err) reject(err);
-                            else {
-                                savedCount++;
-                                resolve();
-                            }
-                        }
-                    );
-                });
-            } catch (timerError) {
-                console.error(`❌ Ошибка сохранения таймера "${name}":`, timerError.message);
-            }
-        }
-        
-        console.log(`✅ Сохранено ${savedCount} таймеров в базу`);
     } catch (error) {
         console.error('❌ Общая ошибка сохранения таймеров:', error.message);
     }
@@ -698,13 +748,17 @@ async saveTimersToDatabase() {
                 }
                 console.log('✅ Подключение к SQLite установлено');
                 
-                // Включаем foreign keys
-                this.db.run('PRAGMA foreign_keys = ON', (err) => {
-                    if (err) {
-                        console.error('❌ Ошибка включения foreign keys:', err.message);
-                    }
-                    
-                    this.initDatabase().then(resolve).catch(reject);
+                // Настраиваем PRAGMA для production
+                this.db.serialize(() => {
+                    this.db.run('PRAGMA foreign_keys = ON');
+                    this.db.run('PRAGMA journal_mode = WAL');
+                    this.db.run('PRAGMA synchronous = NORMAL');
+                    this.db.run('PRAGMA busy_timeout = 5000', (err) => {
+                        if (err) {
+                            console.error('❌ Ошибка настройки PRAGMA:', err.message);
+                        }
+                        this.initDatabase().then(resolve).catch(reject);
+                    });
                 });
             });
         } catch (error) {
@@ -1108,6 +1162,14 @@ async startWebInterface() {
 
     async ensureUserExists(tgId, username, firstName, lastName) {
     try {
+        if (!tgId) return;
+        const cleanTgId = typeof tgId === 'object' && tgId !== null ? (tgId.userId || tgId.id || tgId.value || tgId) : tgId;
+        const normalizedTgId = typeof cleanTgId === 'bigint' ? cleanTgId.toString() : String(cleanTgId);
+        if (normalizedTgId === '[object Object]') {
+            console.error('⚠️ Предотвращена попытка вставки [object Object] в users.tg_id');
+            return;
+        }
+
         // Сначала чекаем существование таблицы users
         const tableExists = await new Promise((resolve, reject) => {
             this.db.get(
@@ -1124,26 +1186,26 @@ async startWebInterface() {
             await this.createUsersTable();
         }
 
-        const user = await this.getUserData(tgId);
+        const user = await this.getUserData(normalizedTgId);
         if (!user) {
             await new Promise((resolve, reject) => {
                 this.db.run(
                     `INSERT OR IGNORE INTO users (tg_id, username, first_name, last_name, access_level) 
                      VALUES (?, ?, ?, ?, ?)`,
-                    [tgId, username, firstName, lastName, 0],
+                    [normalizedTgId, username, firstName, lastName, 0],
                     (err) => {
                         if (err) {
                             console.error('❌ Ошибка вставки пользователя:', err.message);
                             reject(err);
                         } else {
-                            console.log(`✅ Пользователь ${tgId} добавлен в базу`);
+                            console.log(`✅ Пользователь ${normalizedTgId} добавлен в базу`);
                             resolve();
                         }
                     }
                 );
             });
         } else {
-            console.log(`✅ Пользователь ${tgId} уже существует в базе`);
+            console.log(`✅ Пользователь ${normalizedTgId} уже существует в базе`);
         }
     } catch (error) {
         console.error('❌ Ошибка создания пользователя:', error);
@@ -1198,6 +1260,17 @@ async startWebInterface() {
     });
 }
 
+    isOwnerMessage(message, senderId) {
+        if (!this.botInfo) return false;
+        const ownId = (this.botInfo.id && this.botInfo.id.value) 
+            ? Number(this.botInfo.id.value) 
+            : Number(this.botInfo.id);
+        const senderIdNum = (senderId && senderId.value) 
+            ? Number(senderId.value) 
+            : Number(senderId);
+        return Boolean((message && message.out) || (ownId && senderIdNum === ownId));
+    }
+
     setupMessageHandlers() {
     // Обработчик для команд и триггеров
     // Обработчик для команд и триггеров
@@ -1216,11 +1289,16 @@ async startWebInterface() {
                 this.botInfo = await this.telegramClient.getMe();
             }
 
-            // Игнорируем сообщения от самого бота
-            if (senderId === this.botInfo.id) return;
+            // Уровень 1 гварда безопасности: команды доступны ТОЛЬКО владельцу аккаунта
+            const isOwner = this.isOwnerMessage(message, senderId);
 
             // Обработка команд (если сообщение начинается с префикса)
             if (text.startsWith(this.settings.prefix)) {
+                if (!isOwner) {
+                    console.warn(`⛔ [SECURITY] Отклонена попытка вызова команды от не-владельца (senderId: ${senderId})`);
+                    return;
+                }
+
                 const parts = text.split(' ');
                 const command = parts[0].toLowerCase().substring(this.settings.prefix.length);
                 const args = parts.slice(1);
@@ -1363,9 +1441,7 @@ async startWebInterface() {
             'триггер': this.manageTriggers.bind(this),
             'триггеры': this.listTriggers.bind(this),
             'debug_triggers': this.debugTriggers.bind(this),
-            'мегапуш': this.megaPush.bind(this),
             'смс': this.deleteMessages.bind(this),
-            'бомба_смс': this.smsBomb.bind(this),
             'закреп': this.togglePinMessage.bind(this),
             'префикс': this.changePrefix.bind(this),
             'поиск': this.searchCommand.bind(this),
@@ -1536,20 +1612,25 @@ async startWebInterface() {
         }
     }
 
-    // Сохранение шаблона в базу данных
+    // Сохранение шаблона в базу данных (UPSERT с сохранением статистики)
     async saveTemplateToDatabase(templateData) {
         return new Promise((resolve, reject) => {
             this.db.run(
-                `INSERT OR REPLACE INTO templates (name, content_type, text_content, media_data, file_name, mime_type, created_at) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO templates (name, content_type, text_content, media_data, file_name, mime_type, created_at) 
+                 VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                 ON CONFLICT(name) DO UPDATE SET
+                     content_type = excluded.content_type,
+                     text_content = excluded.text_content,
+                     media_data = excluded.media_data,
+                     file_name = excluded.file_name,
+                     mime_type = excluded.mime_type`,
                 [
                     templateData.name,
                     templateData.contentType,
                     templateData.textContent,
                     templateData.mediaData,
                     templateData.fileName,
-                    templateData.mimeType,
-                    new Date()
+                    templateData.mimeType
                 ],
                 (err) => {
                     if (err) reject(err);
@@ -2141,6 +2222,12 @@ async startWebInterface() {
             console.error('❌ Неверный messageId:', messageIdValue);
             return;
         }
+
+        // Уровень 2 гварда безопасности: диспетчер команд выполняет команды только владельца
+        if (!this.isOwnerMessage(message, senderIdValue)) {
+            console.error(`⛔ [SECURITY] handleCommand: отказ в доступе для senderId ${senderIdValue}`);
+            return;
+        }
         
         const user = await this.getUserData(senderIdValue);
         if (!user) {
@@ -2242,9 +2329,7 @@ async startWebInterface() {
         ],
         
         '💬 УПРАВЛЕНИЕ СООБЩЕНИЯМИ': [
-            {command: 'мегапуш [текст]', description: 'Массовая рассылка по всем чатам'},
             {command: 'смс [кол-во]', description: 'Удалить сообщения (ответом на сообщение или по количеству)'},
-            {command: 'бомба_смс [id] [кол-во]', description: 'Спам сообщениями пользователю'},
             {command: 'закреп', description: 'Закрепить сообщение (ответом)'}
         ],
         
@@ -5452,37 +5537,6 @@ async manageTriggerGroups(args, chatId, messageId) {
     await this.editMessage(chatId, messageId, response);
 }
 
-    async megaPush(args, message, chatId, senderId, messageId) {
-        if (args.length === 0) {
-            await this.editMessage(chatId, messageId, 
-                `📢 Использование: ${this.settings.prefix}мегапуш [текст]`
-            );
-            return;
-        }
-        
-        const text = args.join(' ');
-        try {
-            const dialogs = await this.telegramClient.getDialogs({});
-            let sentCount = 0;
-            
-            for (const dialog of dialogs) {
-                if (dialog.isUser || dialog.isGroup) {
-                    try {
-                        await this.telegramClient.sendMessage(dialog.entity.id, { message: text });
-                        sentCount++;
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    } catch (error) {
-                        console.error(`❌ Ошибка отправки в ${dialog.entity.id}: ${error.message}`);
-                    }
-                }
-            }
-            
-            await this.editMessage(chatId, messageId, `✅ Отправлено ${sentCount} сообщений`);
-        } catch (error) {
-            await this.editMessage(chatId, messageId, `❌ Ошибка: ${error.message}`);
-        }
-    }
-
     async deleteMessages(args, message, chatId, senderId, messageId) {
     try {
         let messagesToDelete = [messageId]; // Всегда удаляем сообщение с командой
@@ -5597,31 +5651,6 @@ async manageTriggerGroups(args, chatId, messageId) {
         }
     }
 }
-
-    async smsBomb(args, message, chatId, senderId, messageId) {
-        if (args.length < 2) {
-            await this.editMessage(chatId, messageId, 
-                `💣 Использование: ${this.settings.prefix}бомба_смс [user_id] [количество]`
-            );
-            return;
-        }
-        
-        const targetUserId = parseInt(args[0]);
-        const count = Math.min(parseInt(args[1]), 100);
-        
-        try {
-            for (let i = 0; i < count; i++) {
-                await this.telegramClient.sendMessage(targetUserId, {
-                    message: `💣 SMS Bomb #${i + 1}`
-                });
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-            
-            await this.editMessage(chatId, messageId, `✅ Отправлено ${count} сообщений`);
-        } catch (error) {
-            await this.editMessage(chatId, messageId, `❌ Ошибка: ${error.message}`);
-        }
-    }
 
     async togglePinMessage(args, message, chatId, senderId, messageId) {
     try {
@@ -5880,7 +5909,10 @@ async testCommand(args, message, chatId, senderId, messageId) {
 }
 
 async manageCode(args, message, chatId, senderId, messageId) {
-    // Строгая проверка прав - только владелец
+    // Уровень 3 гварда безопасности: строжайшая проверка прав на уровне файлового менеджера
+    if (!this.isOwnerMessage(message, senderId)) {
+        throw new Error('Критическая ошибка безопасности: управление кодом разрешено только владельцу бота');
+    }
     const user = await this.getUserData(senderId);
 
     if (args.length === 0) {

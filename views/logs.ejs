@@ -10,9 +10,15 @@
     <div class="container">
         <header>
             <h1>📋 Системные логи</h1>
-            <div class="status">
-                <span class="status-indicator connected"></span>
-                <span>Бот активен</span>
+            <div class="network-statuses">
+                <div class="status-badge" id="tgBadge" title="Telegram Client">
+                    <span class="status-indicator connected" id="tgStatusIndicator"></span>
+                    <span id="tgStatusText">TG: Активен</span>
+                </div>
+                <div class="status-badge" id="vkBadge" title="VK Client & Tunnel">
+                    <span class="status-indicator state-disabled" id="vkStatusIndicator"></span>
+                    <span id="vkStatusText">VK: Не настроен</span>
+                </div>
             </div>
         </header>
 
@@ -118,6 +124,7 @@
     document.addEventListener('DOMContentLoaded', loadLogs);
 
     async function loadLogs() {
+        const logsList = document.getElementById('logsList');
         try {
             const response = await fetch('/api/logs');
             const data = await response.json();
@@ -126,34 +133,57 @@
             updateStats(allLogs);
         } catch (error) {
             console.error('Ошибка загрузки логов:', error);
-            document.getElementById('logsList').innerHTML = 
-                '<div class="error-message">❌ Ошибка загрузки логов</div>';
+            logsList.replaceChildren();
+            const errDiv = document.createElement('div');
+            errDiv.className = 'error-message';
+            errDiv.textContent = '❌ Ошибка загрузки логов';
+            logsList.appendChild(errDiv);
         }
     }
 
+    // Безопасный рендеринг строго через DOM API и textContent
     function displayLogs(logs) {
         const logsList = document.getElementById('logsList');
+        logsList.replaceChildren();
         
         if (logs.length === 0) {
-            logsList.innerHTML = '<div class="no-logs">📭 Логи отсутствуют</div>';
+            const emptyDiv = document.createElement('div');
+            emptyDiv.className = 'no-logs';
+            emptyDiv.textContent = '📭 Логи отсутствуют';
+            logsList.appendChild(emptyDiv);
             return;
         }
 
-        logsList.innerHTML = logs.map(log => `
-            <div class="log-entry log-${log.level}">
-                <div class="log-time">${formatTime(log.time)}</div>
-                <div class="log-level">${getLevelIcon(log.level)} ${log.level.toUpperCase()}</div>
-                <div class="log-message">${log.message}</div>
-            </div>
-        `).join('');
+        logs.forEach(log => {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${log.level || 'info'}`;
 
-        // Прокрутка к самым новым логам
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'log-time';
+            timeDiv.textContent = formatTime(log.time);
+
+            const levelDiv = document.createElement('div');
+            levelDiv.className = 'log-level';
+            levelDiv.textContent = `${getLevelIcon(log.level)} ${String(log.level || '').toUpperCase()}`;
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'log-message';
+            msgDiv.textContent = String(log.message || '');
+
+            entry.appendChild(timeDiv);
+            entry.appendChild(levelDiv);
+            entry.appendChild(msgDiv);
+
+            logsList.appendChild(entry);
+        });
+
         logsList.scrollTop = logsList.scrollHeight;
     }
 
     function formatTime(timeString) {
+        if (!timeString) return '';
         const date = new Date(timeString);
-        return date.toLocaleString('ru-RU');
+        return isNaN(date.getTime()) ? String(timeString) : date.toLocaleString('ru-RU');
     }
 
     function getLevelIcon(level) {
@@ -187,7 +217,9 @@
 
     function refreshLogs() {
         loadLogs();
-        dashboard.showNotification('Логи обновлены', 'success');
+        if (window.dashboard) {
+            dashboard.showNotification('Логи обновлены', 'success');
+        }
     }
 
     function clearLogs() {
@@ -196,21 +228,23 @@
             allLogs = [];
             displayLogs([]);
             updateStats([]);
-            dashboard.showNotification('Логи очищены', 'success');
+            if (window.dashboard) {
+                dashboard.showNotification('Логи очищены', 'success');
+            }
         }
     }
 
     function downloadLogs() {
         if (allLogs.length === 0) {
-            dashboard.showNotification('Нет логов для скачивания', 'warning');
+            if (window.dashboard) dashboard.showNotification('Нет логов для скачивания', 'warning');
             return;
         }
 
         const logText = allLogs.map(log => 
-            `[${formatTime(log.time)}] ${log.level.toUpperCase()}: ${log.message}`
+            `[${formatTime(log.time)}] ${String(log.level || '').toUpperCase()}: ${log.message}`
         ).join('\n');
 
-        const blob = new Blob([logText], { type: 'text/plain' });
+        const blob = new Blob([logText], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -218,7 +252,7 @@
         a.click();
         URL.revokeObjectURL(url);
         
-        dashboard.showNotification('Логи скачаны', 'success');
+        if (window.dashboard) dashboard.showNotification('Логи скачаны', 'success');
     }
 
     function toggleAutoRefresh() {
@@ -226,222 +260,106 @@
         
         if (autoRefresh.checked) {
             autoRefreshInterval = setInterval(refreshLogs, 10000);
-            dashboard.showNotification('Автообновление включено', 'success');
+            if (window.dashboard) dashboard.showNotification('Автообновление включено', 'success');
         } else {
             clearInterval(autoRefreshInterval);
             autoRefreshInterval = null;
-            dashboard.showNotification('Автообновление выключено', 'info');
+            if (window.dashboard) dashboard.showNotification('Автообновление выключено', 'info');
+        }
+    }
+
+    // Безопасный поиск с подсветкой без innerHTML (через текстовые узлы и элементы <mark>)
+    function appendHighlightedText(container, text, term) {
+        if (!term) {
+            container.textContent = text;
+            return;
+        }
+        const lowerText = text.toLowerCase();
+        const lowerTerm = term.toLowerCase();
+        let startIndex = 0;
+        let matchIndex = lowerText.indexOf(lowerTerm, startIndex);
+
+        if (matchIndex === -1) {
+            container.textContent = text;
+            return;
+        }
+
+        while (matchIndex !== -1) {
+            if (matchIndex > startIndex) {
+                container.appendChild(document.createTextNode(text.slice(startIndex, matchIndex)));
+            }
+            const mark = document.createElement('mark');
+            mark.textContent = text.slice(matchIndex, matchIndex + term.length);
+            container.appendChild(mark);
+
+            startIndex = matchIndex + term.length;
+            matchIndex = lowerText.indexOf(lowerTerm, startIndex);
+        }
+
+        if (startIndex < text.length) {
+            container.appendChild(document.createTextNode(text.slice(startIndex)));
         }
     }
 
     function searchLogs() {
-        const searchTerm = document.getElementById('logSearch').value.toLowerCase();
-        if (!searchTerm) return;
+        const searchTerm = document.getElementById('logSearch').value.trim();
+        const resultsContainer = document.getElementById('searchResults');
+        resultsContainer.replaceChildren();
 
+        if (!searchTerm) {
+            resultsContainer.style.display = 'none';
+            return;
+        }
+
+        const lowerTerm = searchTerm.toLowerCase();
         const results = allLogs.filter(log => 
-            log.message.toLowerCase().includes(searchTerm) ||
-            log.level.toLowerCase().includes(searchTerm)
+            String(log.message || '').toLowerCase().includes(lowerTerm) ||
+            String(log.level || '').toLowerCase().includes(lowerTerm)
         );
 
-        const resultsContainer = document.getElementById('searchResults');
-        
         if (results.length === 0) {
-            resultsContainer.innerHTML = '<div class="no-results">🔍 Совпадений не найдено</div>';
+            const noRes = document.createElement('div');
+            noRes.className = 'no-results';
+            noRes.textContent = '🔍 Совпадений не найдено';
+            resultsContainer.appendChild(noRes);
         } else {
-            resultsContainer.innerHTML = `
-                <h4>Найдено совпадений: ${results.length}</h4>
-                ${results.map(log => `
-                    <div class="log-entry log-${log.level}">
-                        <div class="log-time">${formatTime(log.time)}</div>
-                        <div class="log-level">${getLevelIcon(log.level)} ${log.level.toUpperCase()}</div>
-                        <div class="log-message">${highlightSearchTerm(log.message, searchTerm)}</div>
-                    </div>
-                `).join('')}
-            `;
+            const heading = document.createElement('h4');
+            heading.textContent = `Найдено совпадений: ${results.length}`;
+            resultsContainer.appendChild(heading);
+
+            results.forEach(log => {
+                const entry = document.createElement('div');
+                entry.className = `log-entry log-${log.level || 'info'}`;
+
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'log-time';
+                timeDiv.textContent = formatTime(log.time);
+
+                const levelDiv = document.createElement('div');
+                levelDiv.className = 'log-level';
+                levelDiv.textContent = `${getLevelIcon(log.level)} ${String(log.level || '').toUpperCase()}`;
+
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'log-message';
+                appendHighlightedText(msgDiv, String(log.message || ''), searchTerm);
+
+                entry.appendChild(timeDiv);
+                entry.appendChild(levelDiv);
+                entry.appendChild(msgDiv);
+
+                resultsContainer.appendChild(entry);
+            });
         }
         
         resultsContainer.style.display = 'block';
     }
 
-    function highlightSearchTerm(text, term) {
-        const regex = new RegExp(`(${term})`, 'gi');
-        return text.replace(regex, '<mark>$1</mark>');
-    }
-
-    // Загрузка логов каждые 30 секунд
+    // Загрузка логов каждые 30 секунд при включенном автообновлении
     setInterval(() => {
         if (document.getElementById('autoRefresh')?.checked) {
             loadLogs();
         }
     }, 30000);
     </script>
-
-    <style>
-    .logs-controls {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
-        align-items: end;
-    }
-
-    .control-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .logs-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 1rem;
-    }
-
-    .log-stat {
-        background: #f7fafc;
-        padding: 1rem;
-        border-radius: 8px;
-        text-align: center;
-    }
-
-    .stat-label {
-        display: block;
-        font-size: 0.875rem;
-        color: #6b7280;
-        margin-bottom: 0.25rem;
-    }
-
-    .stat-value {
-        display: block;
-        font-size: 1.5rem;
-        font-weight: bold;
-    }
-
-    .stat-value.info { color: #3182ce; }
-    .stat-value.warn { color: #d69e2e; }
-    .stat-value.error { color: #e53e3e; }
-    .stat-value.debug { color: #805ad5; }
-
-    .logs-container {
-        max-height: 500px;
-        overflow-y: auto;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        background: #fafafa;
-    }
-
-    .logs-list {
-        padding: 1rem;
-    }
-
-    .log-entry {
-        display: grid;
-        grid-template-columns: 150px 100px 1fr;
-        gap: 1rem;
-        padding: 0.75rem;
-        border-bottom: 1px solid #e2e8f0;
-        align-items: center;
-        font-family: 'Courier New', monospace;
-        font-size: 0.875rem;
-    }
-
-    .log-entry:last-child {
-        border-bottom: none;
-    }
-
-    .log-entry.log-info {
-        background: #ebf8ff;
-        border-left: 4px solid #3182ce;
-    }
-
-    .log-entry.log-warn {
-        background: #fef5e7;
-        border-left: 4px solid #d69e2e;
-    }
-
-    .log-entry.log-error {
-        background: #fed7d7;
-        border-left: 4px solid #e53e3e;
-    }
-
-    .log-entry.log-debug {
-        background: #faf5ff;
-        border-left: 4px solid #805ad5;
-    }
-
-    .log-time {
-        color: #6b7280;
-        font-size: 0.75rem;
-    }
-
-    .log-level {
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.75rem;
-    }
-
-    .log-message {
-        color: #2d3748;
-        word-break: break-word;
-    }
-
-    .search-controls {
-        display: flex;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
-    }
-
-    .search-controls .form-control {
-        flex: 1;
-    }
-
-    .search-results {
-        max-height: 300px;
-        overflow-y: auto;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 1rem;
-        background: #f7fafc;
-    }
-
-    .loading-logs,
-    .no-logs,
-    .error-message {
-        text-align: center;
-        padding: 2rem;
-        color: #6b7280;
-    }
-
-    .error-message {
-        color: #e53e3e;
-    }
-
-    mark {
-        background: #fef5e7;
-        color: #d69e2e;
-        padding: 0.125rem 0.25rem;
-        border-radius: 2px;
-    }
-
-    @media (max-width: 768px) {
-        .logs-controls {
-            flex-direction: column;
-            align-items: stretch;
-        }
-        
-        .log-entry {
-            grid-template-columns: 1fr;
-            gap: 0.25rem;
-        }
-        
-        .log-time,
-        .log-level {
-            font-size: 0.7rem;
-        }
-        
-        .search-controls {
-            flex-direction: column;
-        }
-    }
-    </style>
 </body>
 </html>

@@ -1,11 +1,72 @@
-node_modules/
-congif.json
-config.json
+# ==============================================================================
+# LP-BOT SECURITY & INFRASTRUCTURE GITIGNORE
+# Полная изоляция секретов, БД, сессий, токенов и дампов
+# ==============================================================================
+
+# --- Секреты Telegram, VK, AI и конфигурации ---
 session.txt
 *.session
-.env
-*.sqlite
-dist/
-*.zip
+config.json
+congif.json
 settings.json
+.env
+.env.*
+*.env
+pc_server.env
+
+# --- Базы данных SQLite и транзакционные логи (WAL/SHM/Journal) ---
+*.sqlite
+*.sqlite3
+*.db
 *.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+bot_database.sqlite*
+
+# --- Бэкапы и дампы (включая автобэкапы secret_files.js) ---
+backups/
+*.backup
+*.bak
+*.old
+
+# --- Ключи хостов и временные сокеты туннеля ---
+run/
+*known_hosts*
+*.sock
+
+# --- Логи и дампы процесса ---
+*.log
+bot.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Зависимости сред выполнения (Node & Python) ---
+node_modules/
+.sshvenv/
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+
+# --- Архивы релизов, сборки и слепки ---
+dist/
+build/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+LP-bot-*.tar.gz*
+MANIFEST.sha256
+
+# --- Системный мусор и IDE ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini

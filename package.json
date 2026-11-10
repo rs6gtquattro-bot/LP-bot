@@ -1,10 +1,16 @@
 {
   "name": "lpbot",
   "version": "1.0.0",
-  "description": "",
-  "main": "script.js",
+  "description": "LP-bot for Telegram with VK client, web panel and Electron GUI",
+  "main": "main.js",
   "scripts": {
-    "start": "node script.js"
+    "start": "node main.js",
+    "start:legacy": "node script.js",
+    "check": "node --check main.js script.js vk_client.js web_interface.js tg_web_dc.js secret_files.js",
+    "gui": "electron gui/gui.js",
+    "test:unit": "for t in auth trigger-time vk_client vk_commands tg_ws startup_log secret_files vk_proxy_failclosed vk_prefix; do env -u VK_USER_TOKEN unshare -rn node tests/$t.test.js; done",
+    "test:panel": "node tests/panel_host.test.js",
+    "test": "npm run test:unit && npm run test:panel"
   },
   "dependencies": {
     "axios": "^1.13.1",
@@ -22,5 +28,9 @@
   },
   "devDependencies": {
     "electron": "27.3.11"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   }
 }

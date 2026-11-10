@@ -20,8 +20,12 @@ class BotDashboard {
         };
         
         this.ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            this.handleMessage(data);
+            try {
+                const data = JSON.parse(event.data);
+                this.handleMessage(data);
+            } catch (e) {
+                console.error('Ошибка парсинга WebSocket сообщения:', e);
+            }
         };
         
         this.ws.onclose = () => {
@@ -58,30 +62,80 @@ class BotDashboard {
     }
 
     updateStatus(status) {
-        // Обновляем индикатор статуса
-        const indicator = document.getElementById('statusIndicator');
-        const statusText = document.getElementById('statusText');
+        if (!status) return;
+
+        // 1. Статус Telegram
+        const tgIndicator = document.getElementById('statusIndicator') || document.getElementById('tgStatusIndicator');
+        const tgStatusText = document.getElementById('statusText') || document.getElementById('tgStatusText');
+        const isRunning = status.status === 'running' || Boolean(status.connection);
         
-        if (status.status === 'running') {
-            indicator.className = 'status-indicator connected';
-            statusText.textContent = 'Бот активен';
-            statusText.style.color = '#38a169';
-        } else {
-            indicator.className = 'status-indicator';
-            statusText.textContent = 'Бот остановлен';
-            statusText.style.color = '#e53e3e';
+        if (tgIndicator) {
+            tgIndicator.className = isRunning ? 'status-indicator connected' : 'status-indicator';
+        }
+        if (tgStatusText) {
+            tgStatusText.textContent = isRunning ? 'TG: Активен' : 'TG: Отключен';
+            tgStatusText.style.color = isRunning ? '#38a169' : '#e53e3e';
         }
 
-        // Обновляем данные на главной странице
-        document.getElementById('botStatus').textContent = status.status === 'running' ? 'Активен' : 'Остановлен';
-        document.getElementById('uptime').textContent = status.uptime;
-        document.getElementById('memory').textContent = `${status.memory} MB`;
-        document.getElementById('triggersCount').textContent = status.triggers;
-        document.getElementById('telegramStatus').textContent = status.connection ? 'Подключено' : 'Отключено';
+        // 2. Статус VK (4 цветовых состояния: connected, warning, error, disabled)
+        this.updateVkStatusDisplay(status);
+
+        // 3. Данные на главной странице
+        const botStatus = document.getElementById('botStatus');
+        if (botStatus) botStatus.textContent = isRunning ? 'Активен' : 'Остановлен';
+        const uptime = document.getElementById('uptime');
+        if (uptime && status.uptime) uptime.textContent = status.uptime;
+        const memory = document.getElementById('memory');
+        if (memory && status.memory !== undefined) memory.textContent = `${status.memory} MB`;
+        const triggersCount = document.getElementById('triggersCount');
+        if (triggersCount && status.triggers !== undefined) triggersCount.textContent = status.triggers;
+        const telegramStatus = document.getElementById('telegramStatus');
+        if (telegramStatus) telegramStatus.textContent = status.connection ? 'Подключено' : 'Отключено';
+    }
+
+    updateVkStatusDisplay(status) {
+        const vkIndicator = document.getElementById('vkStatusIndicator');
+        const vkStatusText = document.getElementById('vkStatusText');
+        const vkEventsElem = document.getElementById('vkEventsCount');
+        const vkStatusDetail = document.getElementById('vkStatusDetail');
+
+        // Определяем состояние VK: connected (green), warning (yellow), error (red), disabled (gray)
+        let state = 'disabled';
+        let label = 'VK: Отключен';
+        let detail = 'Токен не задан';
+
+        if (status.vkStatus) {
+            state = status.vkStatus.state || 'disabled';
+            label = `VK: ${status.vkStatus.text || 'Отключен'}`;
+            detail = status.vkStatus.detail || '';
+        } else if (status.vkConnected === true) {
+            state = 'connected';
+            label = 'VK: Активен';
+            detail = 'Long Poll подключен';
+        } else if (status.vkConnected === false) {
+            state = status.vkEvents > 0 ? 'warning' : 'disabled';
+            label = status.vkEvents > 0 ? 'VK: Переподключение' : 'VK: Отключен';
+            detail = status.vkEvents > 0 ? 'Ожидание Long Poll' : 'Клиент не запущен';
+        }
+
+        if (vkIndicator) {
+            vkIndicator.className = `status-indicator state-${state}`;
+        }
+        if (vkStatusText) {
+            vkStatusText.textContent = label;
+            const colors = { connected: '#38a169', warning: '#d69e2e', error: '#e53e3e', disabled: '#a0aec0' };
+            vkStatusText.style.color = colors[state] || '#a0aec0';
+        }
+        if (vkEventsElem && status.vkEvents !== undefined && status.vkEvents !== null) {
+            vkEventsElem.textContent = String(status.vkEvents);
+        }
+        if (vkStatusDetail && detail) {
+            vkStatusDetail.textContent = detail;
+        }
     }
 
     handleUpdate(update) {
-        // Обновляем страницу при изменениях
+        if (!update) return;
         if (update.entity === 'triggers' && window.location.pathname === '/triggers') {
             this.loadTriggers();
         } else if (update.entity === 'settings' && window.location.pathname === '/settings') {
@@ -93,29 +147,66 @@ class BotDashboard {
         try {
             const response = await fetch('/api/triggers');
             const data = await response.json();
-            this.renderTriggers(data.triggers);
+            this.renderTriggers(data.triggers || []);
         } catch (error) {
             console.error('Ошибка загрузки триггеров:', error);
         }
     }
 
+    // Рендеринг строго через DOM API и textContent — никакого innerHTML
     renderTriggers(triggers) {
         const container = document.getElementById('triggersContainer');
         if (!container) return;
 
-        container.innerHTML = triggers.map(trigger => `
-            <div class="table-row">
-                <div class="trigger-word">${trigger.word}</div>
-                <div class="trigger-responses">${trigger.responses.slice(0, 2).join(', ')}</div>
-                <div class="trigger-actions">
-                    <button onclick="deleteTrigger('${trigger.word}')" class="btn danger">Удалить</button>
-                </div>
-            </div>
-        `).join('');
+        container.replaceChildren();
+
+        if (!triggers || triggers.length === 0) {
+            const emptyRow = document.createElement('div');
+            emptyRow.className = 'table-row';
+            const emptyDiv = document.createElement('div');
+            emptyDiv.style.textAlign = 'center';
+            emptyDiv.style.padding = '2rem';
+            emptyDiv.style.color = '#6b7280';
+            emptyDiv.textContent = '📭 Триггеры не найдены';
+            emptyRow.appendChild(emptyDiv);
+            container.appendChild(emptyRow);
+            return;
+        }
+
+        triggers.forEach(trigger => {
+            const row = document.createElement('div');
+            row.className = 'table-row';
+
+            const wordDiv = document.createElement('div');
+            wordDiv.className = 'trigger-word';
+            wordDiv.textContent = trigger.word;
+
+            const responsesDiv = document.createElement('div');
+            responsesDiv.className = 'trigger-responses';
+            const responsesText = Array.isArray(trigger.responses)
+                ? trigger.responses.slice(0, 2).join(', ')
+                : String(trigger.responses || '');
+            responsesDiv.textContent = responsesText;
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'trigger-actions';
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn danger small';
+            deleteBtn.textContent = 'Удалить';
+            deleteBtn.dataset.word = trigger.word;
+            deleteBtn.addEventListener('click', () => deleteTrigger(trigger.word));
+
+            actionsDiv.appendChild(deleteBtn);
+            row.appendChild(wordDiv);
+            row.appendChild(responsesDiv);
+            row.appendChild(actionsDiv);
+
+            container.appendChild(row);
+        });
     }
 
     startStatusUpdates() {
-        // Периодически обновляем статус
         setInterval(() => {
             this.fetchStatus();
         }, 5000);
@@ -123,9 +214,11 @@ class BotDashboard {
 
     async fetchStatus() {
         try {
-            const response = await fetch('/status');
-            const status = await response.json();
-            this.updateStatus(status);
+            const response = await fetch('/api/stats');
+            if (response.ok) {
+                const stats = await response.json();
+                this.updateStatus(stats);
+            }
         } catch (error) {
             console.error('Ошибка получения статуса:', error);
         }
@@ -146,6 +239,7 @@ class BotDashboard {
 
 // Глобальные функции
 async function deleteTrigger(word) {
+    if (!word) return;
     if (!confirm(`Удалить триггер "${word}"?`)) return;
     
     try {
@@ -155,47 +249,77 @@ async function deleteTrigger(word) {
         const result = await response.json();
         
         if (result.success) {
-            dashboard.showNotification('Триггер удален', 'success');
-            dashboard.loadTriggers();
+            if (dashboard) {
+                dashboard.showNotification('Триггер удален', 'success');
+                dashboard.loadTriggers();
+            }
         } else {
-            dashboard.showNotification(result.message, 'error');
+            if (dashboard) dashboard.showNotification(result.message || 'Ошибка удаления', 'error');
         }
     } catch (error) {
-        dashboard.showNotification('Ошибка удаления триггера', 'error');
+        if (dashboard) dashboard.showNotification('Ошибка удаления триггера', 'error');
     }
 }
 
-async function saveSettings(event) {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    const data = Object.fromEntries(formData);
-    
-    try {
-        const response = await fetch('/settings', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-        const result = await response.json();
-        
-        dashboard.showNotification(result.message, result.success ? 'success' : 'error');
-    } catch (error) {
-        dashboard.showNotification('Ошибка сохранения настроек', 'error');
+// Единый стандарт валидации и нормализации префикса
+function normalizePrefixInput(val) {
+    if (!val) return '';
+    let cleaned = val.replace(/\s+/g, '');
+    // Автозамена вариантов кавычек на каноническую '‘' (U+2018)
+    cleaned = cleaned.replace(/['’ʼ`]/g, '‘');
+    return cleaned.slice(0, 3);
+}
+
+function validatePrefix(prefix) {
+    if (!prefix || prefix.length < 1 || prefix.length > 3) {
+        return { valid: false, message: 'Префикс: от 1 до 3 символов' };
     }
+    if (/\s/.test(prefix)) {
+        return { valid: false, message: 'Пробелы запрещены' };
+    }
+    if (/[\p{L}\p{N}]/u.test(prefix)) {
+        return { valid: false, message: 'Буквы и цифры запрещены (только спецсимволы)' };
+    }
+    return { valid: true, message: 'Префикс корректен' };
+}
+
+function setupPrefixValidation(inputId, feedbackId, saveBtnId) {
+    const input = document.getElementById(inputId);
+    const feedback = document.getElementById(feedbackId);
+    const saveBtn = saveBtnId ? document.getElementById(saveBtnId) : null;
+    if (!input) return;
+
+    const runValidation = () => {
+        const normalized = normalizePrefixInput(input.value);
+        if (input.value !== normalized) {
+            input.value = normalized;
+        }
+        const res = validatePrefix(input.value);
+        if (feedback) {
+            feedback.textContent = res.message;
+            feedback.className = `form-feedback ${res.valid ? 'valid' : 'invalid'}`;
+        }
+        input.classList.toggle('is-valid', res.valid);
+        input.classList.toggle('is-invalid', !res.valid);
+        if (saveBtn) saveBtn.disabled = !res.valid;
+    };
+
+    input.addEventListener('input', runValidation);
+    input.addEventListener('paste', () => setTimeout(runValidation, 0));
+    runValidation();
 }
 
 // Инициализация при загрузке страницы
 let dashboard;
 document.addEventListener('DOMContentLoaded', () => {
     dashboard = new BotDashboard();
-    
-    // Загружаем начальные данные
     dashboard.fetchStatus();
     
-    // Если на странице триггеров - загружаем их
     if (window.location.pathname === '/triggers') {
         dashboard.loadTriggers();
+    }
+
+    if (window.location.pathname === '/settings') {
+        setupPrefixValidation('prefix', 'prefixFeedback');
     }
 });

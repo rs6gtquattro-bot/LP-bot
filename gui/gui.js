@@ -162,9 +162,21 @@ class TelegramBotGUI {
         // Запросы к веб-панели бота идут из main-процесса, чтобы не упираться в CORS
         ipcMain.handle('panel-request', async (event, { method = 'GET', url, body }) => {
             try {
+                let token = process.env.PANEL_TOKEN || '';
+                const configPath = path.join(__dirname, '..', 'config.json');
+                if (!token && fs.existsSync(configPath)) {
+                    try {
+                        const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                        token = cfg.panelToken || '';
+                    } catch (e) {}
+                }
+                const headers = {};
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+                if (body) headers['Content-Type'] = 'application/json';
+
                 const response = await fetch(PANEL_URL + url, {
                     method,
-                    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+                    headers: Object.keys(headers).length ? headers : undefined,
                     body: body ? JSON.stringify(body) : undefined
                 });
                 return { ok: response.ok, data: await response.json() };

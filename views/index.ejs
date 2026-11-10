@@ -10,9 +10,15 @@
     <div class="container">
         <header>
             <h1>🤖 lpBot Control Panel</h1>
-            <div class="status" id="status">
-                <span class="status-indicator" id="statusIndicator"></span>
-                <span id="statusText">Загрузка...</span>
+            <div class="network-statuses">
+                <div class="status-badge" id="tgBadge" title="Telegram Client">
+                    <span class="status-indicator" id="tgStatusIndicator"></span>
+                    <span id="tgStatusText">TG: Загрузка...</span>
+                </div>
+                <div class="status-badge" id="vkBadge" title="VK Client & Tunnel">
+                    <span class="status-indicator state-disabled" id="vkStatusIndicator"></span>
+                    <span id="vkStatusText">VK: Не настроен</span>
+                </div>
             </div>
         </header>
 
@@ -64,6 +70,24 @@
                         <div class="stat">
                             <span class="label">Пользователь:</span>
                             <span class="value" id="botUser">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card vk-stat-card">
+                    <h3>🔷 VK Клиент (Long Poll)</h3>
+                    <div class="stats">
+                        <div class="stat">
+                            <span class="label">Состояние:</span>
+                            <span class="value" id="vkStatusDetail">Опрос...</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Событий LP:</span>
+                            <span class="value" id="vkEventsCount">0</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Транспорт:</span>
+                            <span class="value">SOCKS5 (:1080)</span>
                         </div>
                     </div>
                 </div>
