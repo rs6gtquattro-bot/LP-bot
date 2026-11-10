@@ -117,7 +117,7 @@ gui\start_gui.bat
 Все тесты, кроме `panel_host`, идут на заглушках и обязаны запускаться без сети, под `unshare -rn`. В каждом из них первой строкой стоит проверка `tests/_no_network.js`: если у машины есть сетевой интерфейс кроме петли, тест сразу пишет `FAIL сеть доступна` и завершается с кодом 1. Обхода у этой проверки нет.
 
 ```sh
-for t in auth trigger-time vk_client vk_commands tg_port startup_log; do unshare -rn node tests/$t.test.js; done
+for t in auth trigger-time vk_client vk_commands tg_ws startup_log; do unshare -rn node tests/$t.test.js; done
 node tests/panel_host.test.js
 ```
 

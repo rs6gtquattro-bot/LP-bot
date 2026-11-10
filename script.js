@@ -28,6 +28,7 @@
 // импорты
 const { TelegramClient } = require('telegram');
 const { StringSession } = require('telegram/sessions');
+const { useWebTelegramDCs, webClientParams } = require('./tg_web_dc.js'); // TG только через *.web.telegram.org
 const { NewMessage } = require('telegram/events');
 const sqlite3 = require('sqlite3').verbose();
 const input = require('input');
@@ -892,7 +893,7 @@ async saveTimersToDatabase() {
         // ОПТИМИЗИРОВАННАЯ конфигурация клиента
         this.telegramClient = new TelegramClient(stringSession, this.telegramApiId, this.telegramApiHash, {
             connectionRetries: 10,
-            useWSS: true, // TCP на порт 443: порт 80 до Telegram с компьютера запуска не проходит
+            ...webClientParams, // WebSocket-вход *.web.telegram.org:443 (useWSS, PromisedWebSockets, TCPObfuscated)
             autoReconnect: true,
             timeout: 30000,
             requestRetries: 8,
@@ -905,6 +906,7 @@ async saveTimersToDatabase() {
             useIPV6: false,
             proxy: null
         });
+        useWebTelegramDCs(this.telegramClient); // стартовый DC и переходы между DC только по web-именам
 
         console.log('📡 Подключаемся к Telegram серверу...');
         await this.telegramClient.connect();
