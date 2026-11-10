@@ -1067,7 +1067,7 @@ startKeepAlive() {
 async startWebInterface() {
     try {
         if (!this.webInterface) {
-            this.webInterface = new WebInterface(this);
+            this.webInterface = new WebInterface(this, null, 3001, this.panelHost);
         }
         await this.webInterface.start();
         console.log('✅ Веб-интерфейс запущен');
@@ -7379,6 +7379,8 @@ console.log(`- API ID: ${telegramApiId}`);
 console.log(`- API Hash: ${telegramApiHash ? '***' + telegramApiHash.slice(-4) : 'НЕ УСТАНОВЛЕН'}`);
 
 const bot = new lpbot(telegramApiId, telegramApiHash);
+// Адрес веб-панели: panelHost из config.json, по умолчанию 127.0.0.1 (только этот компьютер).
+bot.panelHost = appConfig.panelHost || '127.0.0.1';
 
 // VK-клиент стартует сразу и не ждёт авторизации TG (ТЗ п. 3.4). Без токена пишет одну строку в лог и не запускается.
 const VkClient = require('./vk_client.js');

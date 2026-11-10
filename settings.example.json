@@ -26,7 +26,7 @@
     "status": "🎪 Веселюсь и радуюсь"
   },
   "deepseek": {
-    "apiKey": "REDACTED",
+    "apiKey": "",
     "enabled": true,
     "model": "deepseek-chat",
     "maxTokens": 2048,

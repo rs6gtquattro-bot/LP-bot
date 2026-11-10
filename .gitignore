@@ -7,3 +7,4 @@ session.txt
 *.sqlite
 dist/
 *.zip
+settings.json

@@ -15,6 +15,7 @@ LP-бот для Telegram-аккаунта (GramJS) с VK-клиентом, ве
 cd путь\к\lpbot
 npm install
 copy config.example.json config.json
+copy settings.example.json settings.json
 ```
 
 `npm install` ставит и Electron (devDependency) — он нужен только для GUI.
@@ -25,10 +26,16 @@ copy config.example.json config.json
 
 | Файл | Что в нём | Секрет |
 |---|---|---|
-| `config.json` | `telegramApiId`, `telegramApiHash`, блок `vk` (см. ниже). Образец — `config.example.json` | да |
+| `config.json` | `telegramApiId`, `telegramApiHash`, `panelHost`, блок `vk` (см. ниже). Образец — `config.example.json` | да |
 | `session.txt` | сессия Telegram, создаётся после первого входа | да |
 | `bot_database.sqlite` | БД бота: триггеры, шаблоны, пользователи, состояние VK | да |
-| `settings.json` | префикс, флаги, автостатус, кастомные значения, настройки DeepSeek. Бот перезаписывает его сам | ключ DeepSeek (`deepseek.apiKey`) — да |
+| `settings.example.json` | образец настроек без ключей: префикс, флаги, автостатус, кастомные значения, настройки DeepSeek. Лежит в git. `settings.json` создаётся локально копией этого файла (или самим ботом при сохранении настроек), бот перезаписывает его сам; `settings.json` в `.gitignore` и не коммитится | `settings.example.json` — нет; `settings.json` — да (ключ DeepSeek `deepseek.apiKey`) |
+
+Адрес веб-панели в `config.json`:
+
+| Поле | Значение |
+|---|---|
+| `panelHost` | адрес, на котором слушает панель. По умолчанию `127.0.0.1` — панель доступна только с этого компьютера. `0.0.0.0` открывает её во всю локальную сеть (пароля у панели нет). Порт — 3001 |
 
 Блок `vk` в `config.json`:
 
@@ -39,7 +46,7 @@ copy config.example.json config.json
 | `prefix` | префикс VK-команд, по умолчанию `*` |
 | `trustedIds` | id доверенных VK-пользователей (уровень 1) |
 
-> ⚠️ `settings.json` лежит в репозитории без ключа. После команды `дип_ключ` или сохранения ключа в панели ключ оказывается в этом файле — такой `settings.json` не коммитить.
+> ⚠️ После команды `дип_ключ` или сохранения ключа в панели ключ DeepSeek оказывается в `settings.json`. Поэтому `settings.json` в `.gitignore`, а в git лежит только `settings.example.json` без ключа.
 
 ## Переменные окружения
 
@@ -74,7 +81,7 @@ start.bat
 
 ## Веб-панель
 
-Запускается вместе с ботом: http://localhost:3001
+Запускается вместе с ботом: http://127.0.0.1:3001. По умолчанию слушает только `127.0.0.1` (ключ `panelHost` в `config.json`).
 
 Разделы: главная, настройки, триггеры, шаблоны, команды, DeepSeek, логи, статистика, экспорт.
 
@@ -82,7 +89,7 @@ start.bat
 - Экспорт выгружает в JSON триггеры, шаблоны и безопасные настройки (префикс и флаги). Ключи и сессия в экспорт не попадают.
 - Логи — последние 500 строк консоли бота, только пока он запущен.
 
-> ⚠️ В панели нет пароля. Не открывайте порт 3001 наружу (проброс на роутере, firewall).
+> ⚠️ В панели нет пароля. Не меняйте `panelHost` на `0.0.0.0` и не открывайте порт 3001 наружу (проброс на роутере, firewall).
 
 ## GUI
 
@@ -110,6 +117,7 @@ node tests\auth.test.js
 node tests\trigger-time.test.js
 node tests\vk_client.test.js
 node tests\vk_commands.test.js
+node tests\panel_host.test.js
 ```
 
-Тесты работают на заглушках и не обращаются к Telegram, VK и OpenRouter.
+Тесты работают на заглушках и не обращаются к Telegram, VK и OpenRouter. `panel_host.test.js` нужны установленные `node_modules` (express, ws): он поднимает панель и проверяет, что она слушает только `127.0.0.1` и не принимает подключения с внешнего интерфейса.
