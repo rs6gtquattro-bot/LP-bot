@@ -24,8 +24,14 @@ fs.writeFileSync(path.join(base, '.git', 'config'), FAKE);
 // 1. TG: validateFilePath (через resolveBotPath) закрывает секреты в любом написании
 const blocked = ['session.txt', 'config.json', 'settings.json', '.env', '.env.local', 'a.session', 'congif.json',
     'Session.TXT', 'CONFIG.json', 'Settings.Json', './session.txt', 'sub/session.txt', 'sub\\config.json',
-    '/session.txt', '.git/config', '.git', 'session.txt/x.js'];
+    '/session.txt', '.git/config', '.git', 'session.txt/x.js', 'session~1.txt', 'config~1.json', 'SESSIO~1.TXT', 'sub/SETTIN~2.JSO'];
 for (const p of blocked) t(throws(() => resolveBotPath(base, p)), `TG: доступ к «${p}» запрещён`);
+
+// 1б. общий список: WAL/SHM SQLite и 8.3-имена — секреты (VK их не режет по расширению)
+for (const p of ['bot_database.sqlite-wal', 'bot_database.sqlite-shm', 'db.SQLITE-WAL', 'session~1.txt', 'sub\\CONFIG~1.JSO']) {
+    t(isSecretPath(p), `isSecretPath(«${p}»)`);
+}
+for (const p of ['script.js', 'my-file.txt', 'a~b.txt']) t(!isSecretPath(p), `isSecretPath(«${p}») = нет`);
 
 // 2. Обычные файлы бота по-прежнему доступны
 for (const p of ['script.js', 'README.md', '.', 'tests/auth.test.js', 'settings.example.json', 'config.example.json']) {

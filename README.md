@@ -110,7 +110,7 @@ gui\start_gui.bat
 
 Подробно о VK-клиенте — `docs/vk_client_spec.md`.
 
-Файловые команды `*код …` (TG) и `код показать` (VK) не читают, не меняют и не восстанавливают секретные файлы: `session.txt`, `*.session`, `config.json`, `settings.json`, `.env`, `.env.*`, `*.sqlite`, папку `.git` и бэкапы этих файлов в `backups/`. Регистр букв не важен. Список задан в `secret_files.js`.
+Файловые команды `*код …` (TG) и `код показать` (VK) не читают, не меняют и не восстанавливают секретные файлы: `session.txt`, `*.session`, `config.json`, `settings.json`, `.env`, `.env.*`, `*.sqlite` (и `-journal`, `-wal`, `-shm`), короткие имена Windows вида `SESSIO~1.TXT`, папку `.git` и бэкапы этих файлов в `backups/`. Регистр букв не важен. Список задан в `secret_files.js`.
 
 ## Тесты
 

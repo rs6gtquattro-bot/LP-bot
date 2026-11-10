@@ -5,7 +5,8 @@ const path = require('path');
 
 const SECRET_NAMES = new Set(['session.txt', 'config.json', 'congif.json', 'settings.json', '.env']);
 const SECRET_DIRS = new Set(['.git']); // .git/config, хуки — тоже закрыто
-const SECRET_RE = [/\.session$/, /^\.env\./, /\.sqlite$/, /\.sqlite-journal$/];
+// /~\d/ — короткие имена Windows 8.3 (SESSIO~1.TXT, config~1.json): по ним можно открыть секрет в обход списка
+const SECRET_RE = [/\.session$/, /^\.env\./, /\.sqlite$/, /\.sqlite-(journal|wal|shm)$/, /~\d/];
 
 function isSecretName(name) {
     // бэкап секретного файла (backups/settings.json_<время>.backup) — тоже секрет
