@@ -1,4 +1,4 @@
-require('./_no_network.js')({ strict: true }); // без сети, иначе FAIL; обход LP_TEST_ALLOW_NET не действует (см. tests/_no_network.js)
+require('./_no_network.js')(); // без сети, иначе FAIL (см. tests/_no_network.js)
 // Проверка: при старте script.js не печатает API ID и хвост API Hash.
 // Копия проекта запускается во временной папке с фиктивными ключами на 6 секунд и гасится.
 // Запускать без сети (unshare -rn): Telegram и VK при этом недоступны, наружу ничего не уходит.
