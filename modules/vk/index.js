@@ -134,6 +134,12 @@ module.exports = {
     },
 
     async init(core) {
+        if (global.__lpbotVkClient) {
+            core.provide('vk', global.__lpbotVkClient);
+            module.exports.vkClient = global.__lpbotVkClient;
+            return;
+        }
+
         const settings = core.get('settings');
         const prefix = settings.get('prefix', '*');
         const vkConfig = settings.get('vk', {}) || {};
@@ -165,6 +171,7 @@ module.exports = {
         const vkClient = new VkClient(botAdapter, clientConfig, {
             log: (msg) => core.log('vk', msg)
         });
+        global.__lpbotVkClient = vkClient;
 
         // Предоставляем службу VK ядру
         core.provide('vk', vkClient);
@@ -192,5 +199,6 @@ module.exports = {
                 core.log('vk', `VK stop error: ${err.message}`);
             }
         }
+        global.__lpbotVkClient = null;
     }
 };

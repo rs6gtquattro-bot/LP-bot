@@ -346,14 +346,21 @@ class VkClient {
     matchPrefix(text) {
         const configured = this.config.prefix;
         if (!configured || !text || typeof text !== 'string') return null;
+        if (text.startsWith(configured)) {
+            return { matched: true, length: configured.length, char: configured };
+        }
         if (APOSTROPHE_PREFIXES.has(configured)) {
             const firstChar = text.charAt(0);
             if (APOSTROPHE_PREFIXES.has(firstChar)) {
                 return { matched: true, length: 1, char: firstChar };
             }
         }
-        if (text.startsWith(configured)) {
-            return { matched: true, length: configured.length, char: configured };
+        // Поддержка дуального префикса (* и !) для стандартных конфигураций
+        if (configured === '!' && text.startsWith('*')) {
+            return { matched: true, length: 1, char: '*' };
+        }
+        if (configured === '*' && text.startsWith('!')) {
+            return { matched: true, length: 1, char: '!' };
         }
         return null;
     }
@@ -390,14 +397,22 @@ class VkClient {
             if (!msg.out) await this.handleIncoming(msg);       // защита, капча, триггеры
             return false;
         }
+        console.log(`[VK CMD] Входящее сообщение с префиксом: "${msg.text}" от id${msg.fromId} (peer: ${msg.peerId}, out: ${msg.out})`);
         const level = this.accessLevel(msg);
         if (!level) {                                           // ТЗ п. 5.4
+            console.warn(`[VK CMD] Отказ в доступе: id${msg.fromId} не имеет прав (level: null)`);
             if (!msg.out) await this.handleIncoming(msg);
             return false;
         }
-        const prefix = this.config.prefix;
+        const prefix = match.char || this.config.prefix;
         const body = msg.text.slice(match.length).trim();
-        if (!body) return false;
+        if (!body) {
+            const ctx = this.makeContext(msg, '', [], '', level);
+            if (!msg.out) {
+                await ctx.reply(`💡 Префикс бота: ${prefix}\nНапишите ${prefix}хелп для списка команд`).catch(() => {});
+            }
+            return false;
+        }
         const [rawName, ...args] = body.split(/\s+/);
         const name = rawName.toLowerCase();
         const ctx = this.makeContext(msg, name, args, body.slice(rawName.length).trim(), level);
@@ -406,9 +421,11 @@ class VkClient {
         if (name.startsWith('тг_') && name.length > 3) {
             // Мост в TG выполняет команду от имени аккаунта, поэтому только владельцу
             if (level !== 'owner') {
+                console.warn(`[VK CMD] Команда не найдена или отклонена: "${name}" (level: ${level})`);
                 await ctx.reply(`⛔ Команды TG (${prefix}тг_…) доступны только владельцу`);
                 return true;
             }
+            console.log(`[VK CMD] Выполняется команда: "${name}" (уровень: ${level}, args: ${JSON.stringify(args)})`);
             await this.routeToTg(ctx, name.slice(3));
             return true;
         }
@@ -441,24 +458,30 @@ class VkClient {
 
             if (isTgCmd) {
                 if (level !== 'owner') {
+                    console.warn(`[VK CMD] Команда не найдена или отклонена: "${name}" (level: ${level})`);
                     await ctx.reply(`⛔ Команды TG (${prefix}${rawName}) доступны только владельцу`);
                     return true;
                 }
+                console.log(`[VK CMD] Выполняется команда (TG мост): "${name}" (уровень: ${level}, args: ${JSON.stringify(args)})`);
                 await this.routeToTg(ctx, name);
                 return true;
             }
 
+            console.warn(`[VK CMD] Команда не найдена или отклонена: "${name}" (level: ${level})`);
             await ctx.reply(`❌ Команда '${prefix}${rawName}' не найдена\nДля TG команд: ${prefix}тг_${rawName}`); // ТЗ п. 5.3
             return true;
         }
         if (!this.canRun(level, cmd.level)) {
+            console.warn(`[VK CMD] Команда не найдена или отклонена: "${name}" (level: ${level}, required: ${cmd.level})`);
             await ctx.reply(`⛔ Команда '${prefix}${name}' недоступна для твоего уровня доступа`);
             return true;
         }
+        console.log(`[VK CMD] Выполняется команда: "${name}" (уровень: ${level}, args: ${JSON.stringify(args)})`);
         try {
             await cmd.handler(ctx);
         } catch (e) {
             this.status.errors++;
+            console.error(`[VK CMD] Исключение при выполнении команды "${name}":`, e.message);
             await ctx.reply(`❌ Ошибка выполнения команды: ${e.message}`).catch(() => {});
         }
         return true;

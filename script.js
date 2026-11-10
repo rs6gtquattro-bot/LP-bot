@@ -7451,8 +7451,14 @@ bot.panelHost = appConfig.panelHost || '127.0.0.1';
 
 // VK-клиент стартует сразу и не ждёт авторизации TG (ТЗ п. 3.4). Без токена пишет одну строку в лог и не запускается.
 const VkClient = require('./vk_client.js');
-bot.vkClient = new VkClient(bot, VkClient.configFor(bot, appConfig.vk || {})); // префикс VK = settings.prefix
-bot.vkClient.start().catch((error) => console.error('❌ VK: ошибка запуска:', error.message));
+if (global.__lpbotVkClient) {
+    bot.vkClient = global.__lpbotVkClient;
+    bot.vkClient.bot = bot;
+} else if (!bot.vkClient) {
+    bot.vkClient = new VkClient(bot, VkClient.configFor(bot, appConfig.vk || {})); // префикс VK = settings.prefix
+    global.__lpbotVkClient = bot.vkClient;
+    bot.vkClient.start().catch((error) => console.error('❌ VK: ошибка запуска:', error.message));
+}
 bot.start().catch(console.error);
 
 module.exports = lpbot;
