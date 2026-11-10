@@ -892,7 +892,7 @@ async saveTimersToDatabase() {
         // ОПТИМИЗИРОВАННАЯ конфигурация клиента
         this.telegramClient = new TelegramClient(stringSession, this.telegramApiId, this.telegramApiHash, {
             connectionRetries: 10,
-            useWSS: false,
+            useWSS: true, // TCP на порт 443: порт 80 до Telegram с компьютера запуска не проходит
             autoReconnect: true,
             timeout: 30000,
             requestRetries: 8,

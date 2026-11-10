@@ -8,3 +8,4 @@ session.txt
 dist/
 *.zip
 settings.json
+*.sqlite-journal
