@@ -51,16 +51,33 @@ jobs:
       - name: Compute SHA256 Checksums
         shell: pwsh
         run: |
-          Get-ChildItem -Path "dist" -Include "*.exe", "*.zip" -File | ForEach-Object {
+          $files = Get-ChildItem -Path "dist" -File | Where-Object { $_.Extension -in '.exe', '.zip' }
+          if (-not $files -or $files.Count -eq 0) {
+            Write-Error "CRITICAL: No .exe or .zip release artifacts found in dist/ directory!"
+            exit 1
+          }
+          $hashes = $files | ForEach-Object {
             $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$hash  $($_.Name)"
-          } | Out-File -FilePath "dist/checksums.sha256" -Encoding ascii
+          }
+          if (-not $hashes -or $hashes.Count -eq 0) {
+            Write-Error "CRITICAL: Failed to compute hashes for release artifacts!"
+            exit 1
+          }
+          $hashes | Out-File -FilePath "dist/checksums.sha256" -Encoding ascii
+          $chkFile = Get-Item "dist/checksums.sha256"
+          if ($chkFile.Length -eq 0) {
+            Write-Error "CRITICAL: dist/checksums.sha256 is 0 bytes!"
+            exit 1
+          }
+          Write-Host "Generated checksums.sha256 ($($chkFile.Length) bytes):"
           Get-Content "dist/checksums.sha256"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.tag_name || 'v1.0.0' }}
           files: |
             dist/*.exe
             dist/*.zip
@@ -68,4 +85,4 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          name: Release ${{ github.ref_name || inputs.tag_name }}
+          name: Release ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.tag_name || 'v1.0.0' }}
