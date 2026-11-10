@@ -110,6 +110,15 @@ gui\start_gui.bat
 
 Подробно о VK-клиенте — `docs/vk_client_spec.md`.
 
+### VK через ПК владельца (`tools/vk_tunnel.py`)
+
+Токен VK привязан к IP владельца, поэтому VK-трафик бота идёт через SSH-туннель до его ПК:
+локальный SOCKS5 `127.0.0.1:1080` → SSH (`direct-tcpip`) → ПК → VK. В `config.json`: `"vk": {"proxy": "socks5h://127.0.0.1:1080"}`.
+Через туннель проходят только имена VK (`api/oauth/lp/im.vk.com`, `*.vk.com`, `*.vk.ru`, `*.userapi.com`) и только порт 443; голые IP отклоняются.
+Ключ хоста ПК закреплён в `LP_TUNNEL_KNOWN_HOSTS` (по умолчанию `run/pc_known_hosts`), доступ — из `PC_SERVER_*` в env.
+Туннель упал — VK-клиент получает ошибку, напрямую в VK не ходит. Telegram туннель не использует.
+Тест: `unshare -rn /workspace/.sshvenv/bin/python tests/vk_tunnel_test.py`.
+
 ## Тесты
 
 Тесты запускаются только на Linux (WSL). На Windows их не гоняют.
@@ -117,7 +126,7 @@ gui\start_gui.bat
 Все тесты, кроме `panel_host`, идут на заглушках и обязаны запускаться без сети, под `unshare -rn`. В каждом из них первой строкой стоит проверка `tests/_no_network.js`: если у машины есть сетевой интерфейс кроме петли, тест сразу пишет `FAIL сеть доступна` и завершается с кодом 1. Обхода у этой проверки нет.
 
 ```sh
-for t in auth trigger-time vk_client vk_commands tg_ws startup_log; do unshare -rn node tests/$t.test.js; done
+for t in auth trigger-time vk_client vk_commands tg_ws startup_log vk_proxy_failclosed; do unshare -rn node tests/$t.test.js; done
 node tests/panel_host.test.js
 ```
 
