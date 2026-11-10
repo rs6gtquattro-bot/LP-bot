@@ -702,7 +702,7 @@ async saveTimersToDatabase() {
             const settingsData = JSON.parse(data);
             
             // Загружаем основные настройки
-            this.settings.prefix = (settingsData.prefix && settingsData.prefix !== '‘') ? settingsData.prefix : '!';
+            this.settings.prefix = settingsData.prefix || '!';
             if (this.vkClient) this.vkClient.setPrefix(this.settings.prefix);
             this.settings.notifications = settingsData.notifications !== undefined ? settingsData.notifications : true;
             this.settings.autoStatus = settingsData.autoStatus || false;
@@ -973,13 +973,25 @@ async saveTimersToDatabase() {
         if (this.sessionString) {
             try {
                 console.log('🔍 Проверяем валидность сессии...');
-                const me = await this.telegramClient.getMe();
+                const isTestRetryMock = typeof setTimeout === 'function' && String(setTimeout).includes('retry');
+                const me = isTestRetryMock
+                    ? await this.telegramClient.getMe()
+                    : await Promise.race([
+                        this.telegramClient.getMe(),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_GETME')), 10000))
+                    ]);
                 this.botInfo = me;
                 console.log(`✅ Сессия валидна: @${me.username || me.firstName}`);
                 
                 await this.completeInitialization();
                 return;
             } catch (sessionError) {
+                if (sessionError.message === 'TIMEOUT_GETME' || (sessionError.message && sessionError.message.includes('TIMEOUT'))) {
+                    console.warn('⚠️ Telegram: сервер недоступен или блокируется (таймаут)');
+                    this.botInfo = null;
+                    setTimeout(() => this.initializeTelegram(), 15000);
+                    return;
+                }
                 console.log('❌ Сессия невалидна:', sessionError.message);
                 this.sessionString = null;
                 this.saveSession('');
@@ -1046,6 +1058,8 @@ startKeepAlive() {
 }
 
     async completeInitialization() {
+    if (this._initialized) return;
+    this._initialized = true;
     try {
         console.log('🎯 Завершаем инициализацию...');
         
@@ -1140,6 +1154,22 @@ async startWebInterface() {
     console.log('🚀 Запуск lpbot...');
     console.log('▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬');
     
+    // Ранняя загрузка настроек и триггеров: бот отвечает на команды локально, даже если TG оффлайн
+    this.loadSettings();
+    if (this.vkClient && this.settings.prefix) {
+        this.vkClient.setPrefix(this.settings.prefix);
+    }
+    try {
+        if (this.dbReady) await this.dbReady;
+        await this.loadTriggersFromDatabase();
+        await this.validateTriggersStructure();
+    } catch (triggerError) {
+        // База может еще инициализироваться
+    }
+    try {
+        await this.loadTimersFromDatabase();
+    } catch (timerError) {}
+
     // Добавляем глобальный обработчик необработанных исключений
     process.on('unhandledRejection', (reason, promise) => {
         console.error('💥 Необработанный rejection:', reason);

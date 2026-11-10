@@ -161,7 +161,13 @@ class WebInterface {
 
     async templatesList() {
         try {
-            return await this.bot.getAllTemplates();
+            if (this.bot && typeof this.bot.getAllTemplates === 'function') {
+                return await this.bot.getAllTemplates();
+            }
+            if (this.db && typeof this.db.getAllTemplates === 'function') {
+                return await this.db.getAllTemplates();
+            }
+            return [];
         } catch (error) {
             console.error('❌ Ошибка загрузки шаблонов:', error.message);
             return [];

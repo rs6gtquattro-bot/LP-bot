@@ -63,6 +63,12 @@ module.exports = {
                 try { return core.get('vk'); } catch { return null; }
             },
             db,
+            async getAllTemplates() {
+                if (db && typeof db.getAllTemplates === 'function') {
+                    return await db.getAllTemplates();
+                }
+                return [];
+            },
             saveSettings() {
                 if (typeof settings.save === 'function') settings.save();
             }
