@@ -63,6 +63,14 @@ test('on/emit awaits multiple listeners and preserves arguments', async () => {
     await core.emit('no-listeners');
     assert.throws(() => core.on('message', null), /Invalid listener/);
 });
+test('emit delivers all synchronous listeners immediately even without await', async () => {
+    const core = quiet(), seen = [];
+    core.on('message', () => seen.push('first'));
+    core.on('message', () => seen.push('second'));
+    const done = core.emit('message');
+    assert.deepEqual(seen, ['first', 'second']);
+    await done;
+});
 test('listener rejection is isolated; remaining listener runs', async () => {
     const lines = [], core = createCore({ logger: line => lines.push(line) });
     let delivered = false;

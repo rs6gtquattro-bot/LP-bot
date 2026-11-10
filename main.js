@@ -36,9 +36,9 @@ function createCore({ logger = console.log } = {}) {
             return core;
         },
         async emit(event, ...args) {
-            for (const fn of [...(events.get(event) || [])]) {
+            await Promise.all([...(events.get(event) || [])].map(async fn => {
                 try { await fn(...args); } catch { core.log('events', `Listener failed: ${event}`); }
-            }
+            }));
         },
         log(module, text) { try { logger(`[${redact(module)}] ${redact(text)}`); } catch { /* Logging must not break isolation. */ } }
     };

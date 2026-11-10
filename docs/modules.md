@@ -62,8 +62,8 @@ module.exports = {
   вне загрузки исключение получает вызывающий код. Имена чувствительны к регистру.
 - `core.commands.get(name)` возвращает `{ handler, ...meta }` либо `undefined`.
   Стандартный вызов: `await entry.handler(core, context)`.
-- `core.on(event, fn)` / `await core.emit(event, ...args)` — слушатели выполняются
-  последовательно, ошибка одного логируется без остановки остальных. `message`
+- `core.on(event, fn)` / `await core.emit(event, ...args)` — слушатели вызываются
+  сразу по порядку, `await emit` ждёт всех; ошибка одного не мешает остальным. `message`
   передаёт аргументы маршрутизатора; `ready` означает готовность ядра, не вход TG;
   `stop` отправляет `await core.stop()`.
 - `core.log(module, text)` — строка `[module] text`; известные префиксы ключей
