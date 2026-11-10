@@ -114,7 +114,7 @@ gui\start_gui.bat
 
 Токен VK привязан к IP владельца, поэтому VK-трафик бота идёт через SSH-туннель до его ПК:
 локальный SOCKS5 `127.0.0.1:1080` → SSH (`direct-tcpip`) → ПК → VK. В `config.json`: `"vk": {"proxy": "socks5h://127.0.0.1:1080"}`.
-Через туннель проходят только имена VK (`api/oauth/lp/im.vk.com`, `*.vk.com`, `*.vk.ru`, `*.userapi.com`) и только порт 443; голые IP отклоняются.
+Через туннель проходят только имена из списка в коде: VK (`api/oauth/lp/im.vk.com`, `*.vk.com`, `*.vk.ru`, `*.userapi.com`) и `nominatim.openstreetmap.org` (геокодинг VK-команды), только порт 443; имена проверяются строго (`[a-z0-9-]`, 1–63 символа на часть), голые IP отклоняются. Расширить список через окружение нельзя.
 Ключ хоста ПК закреплён в `LP_TUNNEL_KNOWN_HOSTS` (по умолчанию `run/pc_known_hosts`), доступ — из `PC_SERVER_*` в env.
 Туннель упал — VK-клиент получает ошибку, напрямую в VK не ходит. Telegram туннель не использует.
 Тест: `unshare -rn /workspace/.sshvenv/bin/python tests/vk_tunnel_test.py`.

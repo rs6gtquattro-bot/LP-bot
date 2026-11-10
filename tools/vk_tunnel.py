@@ -3,34 +3,42 @@
 
 Только для VK-клиента бота (config.json: vk.proxy = socks5h://127.0.0.1:1080).
 - Принимает только CONNECT с доменным именем (socks5h). Голые IPv4/IPv6 отклоняются.
-- Пропускает только имена из белого списка VK и только порт 443.
+- Пропускает только имена из белого списка в коде (VK + nominatim.openstreetmap.org) и только порт 443.
+  Расширить список из окружения нельзя.
 - Ключ хоста ПК закреплён в файле known_hosts (LP_TUNNEL_KNOWN_HOSTS); чужой ключ -> отказ.
 - Пароль и адрес ПК берутся из env (PC_SERVER_*), в лог и аргументы не пишутся.
 Запуск: set -a; source /home/box/secrets/pc_server.env; set +a;
         /workspace/.sshvenv/bin/python tools/vk_tunnel.py
 """
-import os, select, socket, struct, sys, threading, time
+import os, re, select, socket, struct, sys, threading, time
 
 VK_EXACT = {'api.vk.com', 'oauth.vk.com', 'lp.vk.com', 'im.vk.com'}
 VK_SUFFIX = ('.vk.com', '.vk.ru', '.userapi.com')
+# Не VK, но ходит через тот же http-клиент VK (команда геокодинга); разрешено Денисом, только 443.
+OTHER_EXACT = {'nominatim.openstreetmap.org'}
 ALLOWED_PORTS = {443}
+LABEL_RE = re.compile(r'^[a-z0-9-]{1,63}$')
 
 # SOCKS5 коды ответа
 REP_OK, REP_FAIL, REP_NOT_ALLOWED, REP_CMD, REP_ATYP = 0x00, 0x01, 0x02, 0x07, 0x08
 
 
-def extra_hosts():
-    raw = os.environ.get('LP_TUNNEL_EXTRA_HOSTS', '')
-    return {h.strip().lower().rstrip('.') for h in raw.split(',') if h.strip()}
-
-
-def host_allowed(host, port, extra=frozenset()):
-    if port not in ALLOWED_PORTS:
-        return False
-    h = (host or '').lower().rstrip('.')
+def valid_hostname(h):
+    # Строго: каждая часть имени только [a-z0-9-], 1..63 символа, без '-' по краям.
     if not h or len(h) > 253:
         return False
-    if h in VK_EXACT or h in extra:
+    return all(LABEL_RE.fullmatch(p) and not p.startswith('-') and not p.endswith('-') for p in h.split('.'))
+
+
+def host_allowed(host, port):
+    if port not in ALLOWED_PORTS:
+        return False
+    h = (host or '').lower()
+    if h.endswith('.'):
+        h = h[:-1]
+    if not valid_hostname(h):
+        return False
+    if h in VK_EXACT or h in OTHER_EXACT:
         return True
     return any(h.endswith(s) and len(h) > len(s) for s in VK_SUFFIX)
 
@@ -49,7 +57,7 @@ def reply(sock, code):
     sock.sendall(struct.pack('!BBBB4sH', 5, code, 0, 1, b'\0\0\0\0', 0))
 
 
-def handshake(sock, extra=frozenset()):
+def handshake(sock):
     """Разбирает SOCKS5-запрос. Возвращает (host, port) или (None, причина) после отправки отказа."""
     ver, nmethods = recv_exact(sock, 2)
     if ver != 5:
@@ -79,7 +87,7 @@ def handshake(sock, extra=frozenset()):
         reply(sock, REP_ATYP)
         return None, 'неизвестный тип адреса'
     port = struct.unpack('!H', recv_exact(sock, 2))[0]
-    if not host_allowed(host, port, extra):
+    if not host_allowed(host, port):
         reply(sock, REP_NOT_ALLOWED)
         return None, f'запрещено: {host}:{port}'
     return (host, port), None
@@ -145,10 +153,10 @@ class Tunnel:
         return self._transport().open_channel('direct-tcpip', (host, port), src, timeout=20)
 
 
-def handle(conn, addr, tunnel, extra):
+def handle(conn, addr, tunnel):
     try:
         conn.settimeout(20)
-        dest, why = handshake(conn, extra)
+        dest, why = handshake(conn)
         if dest is None:
             log(f'ОТКАЗ {why}')
             conn.close()
@@ -172,17 +180,17 @@ def handle(conn, addr, tunnel, extra):
             pass
 
 
-def serve(listen_port, tunnel, extra=frozenset(), ready=None):
+def serve(listen_port, tunnel, ready=None):
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind(('127.0.0.1', listen_port))                 # только петля
     srv.listen(64)
-    log(f'SOCKS5 на 127.0.0.1:{srv.getsockname()[1]}, белый список VK, порт 443')
+    log(f'SOCKS5 на 127.0.0.1:{srv.getsockname()[1]}, белый список VK + nominatim, порт 443')
     if ready:
         ready(srv)
     while True:
         conn, addr = srv.accept()
-        threading.Thread(target=handle, args=(conn, addr, tunnel, extra), daemon=True).start()
+        threading.Thread(target=handle, args=(conn, addr, tunnel), daemon=True).start()
 
 
 def main():
@@ -191,12 +199,9 @@ def main():
             log(f'нет переменной {k}')
             sys.exit(2)
     port = int(os.environ.get('LP_TUNNEL_PORT', '1080'))
-    extra = extra_hosts()
-    if extra:
-        log(f'ВРЕМЕННО добавлены имена: {sorted(extra)}')
     tunnel = Tunnel()
     tunnel._transport()                                   # проверка ключа хоста и входа сразу при старте
-    serve(port, tunnel, frozenset(extra))
+    serve(port, tunnel)
 
 
 if __name__ == '__main__':
