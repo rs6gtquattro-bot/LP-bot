@@ -1,3 +1,4 @@
+require('./_no_network.js')(); // без сети, иначе FAIL (см. tests/_no_network.js)
 // Тест проверки времени/дней триггеров и неизменности parseTime.
 // Запуск: node tests/trigger-time.test.js  (сеть и Telegram не нужны)
 const fs = require('fs');

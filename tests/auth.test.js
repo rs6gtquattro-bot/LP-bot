@@ -1,3 +1,4 @@
+require('./_no_network.js')(); // без сети, иначе FAIL (см. tests/_no_network.js)
 // Тест авторизации Telegram: ветка с готовой сессией и ветка без неё.
 // Запуск: node tests/auth.test.js  (сеть и Telegram не нужны, всё на заглушках)
 const fs = require('fs');

@@ -1,3 +1,4 @@
+require('./_no_network.js')(); // без сети, иначе FAIL (см. tests/_no_network.js)
 // Тесты команд VK (ТЗ п. 6) и межплатформенной маршрутизации (п. 5.6).
 // Всё на заглушках: axios, БД, TG-клиент, таймеры. Реальный VK, tor и OpenRouter не используются.
 // Запуск: node tests/vk_commands.test.js
