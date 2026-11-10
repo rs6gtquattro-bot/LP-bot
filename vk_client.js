@@ -63,8 +63,11 @@ function unescapeHTML(str) {
 }
 
 class VkClient {
+    static version = '1.0.0';
+
     // deps — для тестов: axios, createProxyAgent, now, sleep, log
     constructor(bot, config = {}, deps = {}) {
+        this.version = '1.0.0';
         this.bot = bot;
         this.config = { ...DEFAULTS, ...config };
         this.deps = {

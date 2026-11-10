@@ -144,4 +144,10 @@ async function start({ modulesDir, logger, legacy = () => require('./script.js')
 }
 
 module.exports = { createCore, start };
-if (require.main === module) start().catch(() => { console.error('[engine] Startup failed'); process.exitCode = 1; });
+if (require.main === module) {
+    if (process.versions && process.versions.electron && !process.env.ELECTRON_RUN_AS_NODE) {
+        require('./gui/gui.js');
+    } else {
+        start().catch(() => { console.error('[engine] Startup failed'); process.exitCode = 1; });
+    }
+}

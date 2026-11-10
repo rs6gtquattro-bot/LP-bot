@@ -163,7 +163,11 @@ class TelegramBotGUI {
         ipcMain.handle('panel-request', async (event, { method = 'GET', url, body }) => {
             try {
                 let token = process.env.PANEL_TOKEN || '';
-                const configPath = path.join(__dirname, '..', 'config.json');
+                let configPath = path.join(__dirname, '..', 'config.json');
+                try {
+                    const paths = require('../paths.js');
+                    if (paths && paths.CONFIG_PATH) configPath = paths.CONFIG_PATH;
+                } catch (e) {}
                 if (!token && fs.existsSync(configPath)) {
                     try {
                         const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -192,10 +196,19 @@ class TelegramBotGUI {
         }
 
         try {
-            // Используем правильный путь к script.js (на уровень выше в profilesbot)
-            const scriptPath = path.join(__dirname, '..', 'script.js');
-            this.botProcess = spawn('node', [scriptPath], {
-                cwd: path.join(__dirname, '..'), // Рабочая директория - profilesbot
+            // Запуск через модульное ядро main.js
+            const botEntry = path.join(__dirname, '..', 'main.js');
+            // Если запущено внутри Electron, используем встроенный Node.js рантайм через ELECTRON_RUN_AS_NODE=1
+            const isElectron = Boolean(process.versions && process.versions.electron);
+            const executable = isElectron ? process.execPath : 'node';
+            const spawnEnv = { ...process.env };
+            if (isElectron) {
+                spawnEnv.ELECTRON_RUN_AS_NODE = '1';
+            }
+
+            this.botProcess = spawn(executable, [botEntry], {
+                cwd: path.join(__dirname, '..'),
+                env: spawnEnv,
                 stdio: ['pipe', 'pipe', 'pipe'],
                 detached: false
             });

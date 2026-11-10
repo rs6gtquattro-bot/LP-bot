@@ -14,9 +14,12 @@ function safeCompare(a, b) {
 }
 
 class WebInterface {
+    static version = '1.0.0';
+
     // host: адрес, на котором слушает панель. По умолчанию только локальная петля 127.0.0.1,
     // наружу панель открывается только явно через panelHost в config.json.
     constructor(bot, db, port = 3001, host = '127.0.0.1', token = null) {
+        this.version = '1.0.0';
         this.bot = bot;
         this.db = db || (bot && bot.db);
         this.port = port;
@@ -144,7 +147,7 @@ class WebInterface {
 
     // Общие данные, которые нужны всем шаблонам с меню
     base(extra = {}) {
-        return { bot: this.bot, prefix: this.bot.settings.prefix, ...extra };
+        return { bot: this.bot, prefix: this.bot.settings.prefix, version: this.version || '1.0.0', ...extra };
     }
 
     triggersList() {
@@ -258,6 +261,7 @@ class WebInterface {
         this.app.get('/status', (req, res) => {
             const s = this.getStats();
             res.json({
+                version: this.version || '1.0.0',
                 status: s.connected ? 'running' : 'stopped',
                 ...s,
                 uptime: s.uptimeText,
@@ -277,6 +281,7 @@ class WebInterface {
             const popular = triggers.slice().sort((a, b) => uses(b) - uses(a))[0];
             const today = new Date(); today.setHours(0, 0, 0, 0);
             res.json({
+                version: this.version || '1.0.0',
                 ...this.getStats(),
                 templates: templates.length,
                 textTemplates: templates.filter(t => t.content_type === 'text').length,
@@ -467,6 +472,7 @@ class WebInterface {
         const h = Math.floor(uptime / 3600), m = Math.floor((uptime % 3600) / 60), sec = uptime % 60;
         const client = this.bot.telegramClient;
         return {
+            version: this.version || '1.0.0',
             connected: Boolean(this.bot.isRunning && client && client.connected),
             activeTriggers: this.bot.settings.triggers instanceof Map ? this.bot.settings.triggers.size : 0,
             timers: this.bot.settings.timers instanceof Map ? this.bot.settings.timers.size : 0,

@@ -30,6 +30,7 @@ const { TelegramClient } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const { useWebTelegramDCs, webClientParams } = require('./tg_web_dc.js'); // TG только через *.web.telegram.org
 const { resolveBotPath, resolveRestore } = require('./secret_files.js'); // файловые команды не трогают секретные файлы
+const { DB_PATH, SESSION_PATH, CONFIG_PATH, SETTINGS_PATH, BACKUPS_DIR, DATA_DIR } = require('./paths.js'); // постоянные пути для .exe и прода
 const { NewMessage } = require('telegram/events');
 const sqlite3 = require('sqlite3').verbose();
 const input = require('input');
@@ -669,7 +670,7 @@ async saveTimersToDatabase() {
 
     saveSettings() {
     try {
-        const settingsFile = path.join(__dirname, 'settings.json');
+        const settingsFile = SETTINGS_PATH;
         const settingsData = {
             prefix: this.settings.prefix,
             notifications: this.settings.notifications,
@@ -687,7 +688,7 @@ async saveTimersToDatabase() {
         };
         
         fs.writeFileSync(settingsFile, JSON.stringify(settingsData, null, 2));
-        console.log('✅ Настройки сохранены в settings.json');
+        console.log(`✅ Настройки сохранены в ${settingsFile}`);
     } catch (error) {
         console.error('❌ Ошибка сохранения настроек:', error.message);
     }
@@ -695,7 +696,7 @@ async saveTimersToDatabase() {
 
     loadSettings() {
     try {
-        const settingsFile = path.join(__dirname, 'settings.json');
+        const settingsFile = SETTINGS_PATH;
         if (fs.existsSync(settingsFile)) {
             const data = fs.readFileSync(settingsFile, 'utf8');
             const settingsData = JSON.parse(data);
@@ -736,8 +737,8 @@ async saveTimersToDatabase() {
     setupDatabase() {
     return new Promise((resolve, reject) => {
         try {
-            // Используем файловую базу данных вместо памяти для сохранности данных
-            const dbPath = path.join(__dirname, 'bot_database.sqlite');
+            // Используем файловую базу данных в постоянном хранилище (не во временных каталогах .exe)
+            const dbPath = DB_PATH;
             console.log(`💾 База данных: ${dbPath}`);
             
             this.db = new sqlite3.Database(dbPath, (err) => {
@@ -1099,7 +1100,7 @@ startKeepAlive() {
 
     loadSession() {
         try {
-            const sessionFile = path.join(__dirname, 'session.txt');
+            const sessionFile = SESSION_PATH;
             if (fs.existsSync(sessionFile)) {
                 const sessionData = fs.readFileSync(sessionFile, 'utf8').trim();
                 if (sessionData && sessionData.length > 10) {
@@ -1114,9 +1115,9 @@ startKeepAlive() {
 
     saveSession(sessionString) {
         try {
-            const sessionFile = path.join(__dirname, 'session.txt');
+            const sessionFile = SESSION_PATH;
             fs.writeFileSync(sessionFile, sessionString);
-            console.log('✅ Сессия сохранена');
+            console.log(`✅ Сессия сохранена в ${sessionFile}`);
         } catch (error) {
             console.error('❌ Ошибка сохранения сессии:', error.message);
         }
@@ -6372,7 +6373,7 @@ async restoreBackup(args, chatId, messageId) {
 
     const backupName = args[0];
     // Имя без пути; поверх секретных файлов не восстанавливаем (secret_files.js)
-    const { backupPath, originalName, originalPath } = resolveRestore(__dirname, backupName);
+    const { backupPath, originalName, originalPath } = resolveRestore(DATA_DIR, backupName);
     
     if (!fs.existsSync(backupPath)) {
         throw new Error('Бэкап не найден');
@@ -6408,7 +6409,7 @@ async restartBot(chatId, messageId) {
 
 validateFilePath(userPath) {
     // Пути только внутри папки бота, без .., с разрешённым расширением; секретные файлы закрыты (secret_files.js)
-    return resolveBotPath(__dirname, userPath);
+    return resolveBotPath(DATA_DIR, userPath);
 }
 
 async validateJavaScript(code) {
@@ -7374,10 +7375,10 @@ splitMessage(text, maxLength) {
 }}
 
 // ========== ЗАПУСК БОТА ==========
-// Ключи Telegram API берутся из config.json рядом со script.js (см. config.example.json)
+// Ключи Telegram API берутся из config.json в постоянном каталоге данных (см. config.example.json)
 // или из переменных окружения TELEGRAM_API_ID / TELEGRAM_API_HASH (имеют приоритет).
 const appConfig = (() => {
-    const configPath = path.join(__dirname, 'config.json');
+    const configPath = CONFIG_PATH;
     try {
         return fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {};
     } catch (error) {

@@ -10,7 +10,88 @@
     "gui": "electron gui/gui.js",
     "test:unit": "for t in auth trigger-time vk_client vk_commands tg_ws startup_log secret_files vk_proxy_failclosed vk_prefix; do env -u VK_USER_TOKEN unshare -rn node tests/$t.test.js; done",
     "test:panel": "node tests/panel_host.test.js",
-    "test": "npm run test:unit && npm run test:panel"
+    "test": "npm run test:unit && npm run test:panel",
+    "dist:exe": "electron-builder --win portable --x64",
+    "dist:portable": "node tools/build_portable.js",
+    "dist": "npm run dist:exe && npm run dist:portable",
+    "audit:dist": "node tools/audit_dist.js",
+    "release:hash": "node tools/release_hash.js"
+  },
+  "pkg": {
+    "scripts": [
+      "script.js",
+      "vk_client.js",
+      "web_interface.js",
+      "tg_web_dc.js",
+      "secret_files.js"
+    ],
+    "assets": [
+      "views/**/*",
+      "public/**/*",
+      "config.example.json",
+      "settings.example.json"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ],
+    "outputPath": "dist"
+  },
+  "build": {
+    "appId": "com.lpbot.app",
+    "productName": "LP-bot",
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "script.js",
+      "vk_client.js",
+      "web_interface.js",
+      "tg_web_dc.js",
+      "secret_files.js",
+      "package.json",
+      "config.example.json",
+      "settings.example.json",
+      "gui/**/*",
+      "views/**/*",
+      "public/**/*",
+      "modules/**/*",
+      "assets/**/*",
+      "!**/*.sqlite*",
+      "!**/*.sqlite",
+      "!**/*.sqlite-wal",
+      "!**/*.sqlite-shm",
+      "!**/*.sqlite.bak",
+      "!**/*.db*",
+      "!**/*.session*",
+      "!**/session.txt",
+      "!**/config.json",
+      "!**/congif.json",
+      "!**/settings.json",
+      "!**/.env*",
+      "!**/.git*",
+      "!**/*.log",
+      "!tests/**/*",
+      "!backups/**/*",
+      "!tools/**/*",
+      "!docs/**/*",
+      "!ТЗ/**/*",
+      "!**/*.tar.gz*",
+      "!**/*.sha256",
+      "!**/*.backup",
+      "!**/ЗАПУСК.txt"
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "LP-bot-v${version}-windows-x64.exe"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/sqlite3/**/*"
+    ]
   },
   "dependencies": {
     "axios": "^1.13.1",
@@ -27,7 +108,8 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "electron": "27.3.11"
+    "electron": "27.3.11",
+    "electron-builder": "^26.18.0"
   },
   "engines": {
     "node": ">=18.0.0",
