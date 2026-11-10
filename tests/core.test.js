@@ -12,12 +12,13 @@ const temp = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lp-core-
 function fixture(root, dir, name, extra = '') {
     const folder = path.join(root, dir);
     fs.mkdirSync(folder, { recursive: true });
-    fs.writeFileSync(path.join(folder, 'index.js'), `module.exports = { name: ${JSON.stringify(name)}, version: '1.0.0', engine: '^2.0.0', requires: [], ${extra} };\n`);
+    fs.writeFileSync(path.join(folder, 'index.js'), `module.exports = { name: ${JSON.stringify(name)}, version: '1.0.0', engine: '^1.0.0', requires: [], ${extra} };\n`);
 }
 const names = map => [...map.keys()];
 
 test('import is inert; version comes from package.json', () => {
-    assert.equal(quiet().version, '2.0.0');
+    assert.equal(quiet().version, '1.0.0');
+    assert.match(quiet().version, /^\d+\.\d+\.\d+$/);
     assert.equal(quiet().version, require('../package.json').version);
     assert.equal(require.cache[require.resolve('../script.js')], undefined);
 });
@@ -105,12 +106,12 @@ test('recursive loader orders requires before consumers; real handlers and alias
     assert.equal(await core.commands.get('hi').handler(core, { args: 'alias' }), 'hello alias');
     assert.equal(core.commands.get('hi').help, 'greeting');
 });
-test('bad engines disabled; exact and caret stable engine 2.0.0 accepted', async () => {
+test('bad engines disabled; exact and caret stable engine 1.0.0 accepted', async () => {
     const root = temp(), core = quiet();
-    for (const [i, engine] of ['^1.0.0', '^3.0.0', '^2.1.0', '*', '^2.0.0-beta', '2.0.1', null].entries()) {
+    for (const [i, engine] of ['^0.9.0', '^2.0.0', '^1.1.0', '*', '^1.0.0-beta', '1.0.1', null].entries()) {
         fixture(root, 'bad' + i, 'bad' + i, `engine: ${JSON.stringify(engine)}, init() { throw new Error('must not run'); }`);
     }
-    fixture(root, 'exact', 'exact', `engine: '2.0.0'`);
+    fixture(root, 'exact', 'exact', `engine: '1.0.0'`);
     fixture(root, 'caret', 'caret');
     await core.loadModules(root);
     assert.equal(core.modules.disabled.size, 7);
@@ -188,7 +189,7 @@ test('module duplicate command/alias rejected with rollback, original survives',
     assert.equal(core.commands.get('pong').handler(), 'original');
     assert(!core.commands.has('temporary'));
     assert(!core.commands.has('name'));
-    assert.match(core.commands.get('движок').handler(core, {}), /2\.0\.0/);
+    assert.match(core.commands.get('движок').handler(core, {}), /1\.0\.0/);
 });
 test('malformed command, invalid lifecycle and failed cleanup do not stop neighbors', async () => {
     const root = temp(), core = quiet();
@@ -230,7 +231,7 @@ test('engine command returns actual lists, version and prefix-neutral instructio
     fixture(root, 'bad', 'bad', `engine: '^3.0.0'`);
     await core.loadModules(root);
     const text = await core.commands.get('движок').handler(core, {});
-    for (const expected of ['2.0.0', 'Загружены: live', 'Отключены: bad', 'modules/', 'экспортируй объект', 'перезапусти бота', 'docs/modules.md']) {
+    for (const expected of ['1.0.0', 'Загружены: live', 'Отключены: bad', 'modules/', 'экспортируй объект', 'перезапусти бота', 'docs/modules.md']) {
         assert(text.includes(expected));
     }
     assert(!/[‘’']движок/.test(text));
@@ -319,3 +320,14 @@ test('main.js <=200 lines; legacy package entry/start preserved', () => {
     console.log(`ИТОГ: core ${tests.length - failed} OK, ${failed} FAIL`);
     process.exitCode = failed ? 1 : 0;
 })();
+
+test('module version must be X.Y.Z; other formats disabled, neighbor alive', async () => {
+    const root = temp(), core = quiet();
+    for (const [i, v] of ['2.0', 'v1.0.0', '1.0.0-beta', '1.0.0.1', ''].entries()) {
+        fixture(root, 'badver' + i, 'badver' + i, `version: ${JSON.stringify(v)}, init() { throw new Error('must not run'); }`);
+    }
+    fixture(root, 'goodver', 'goodver', `version: '1.2.3'`);
+    await core.loadModules(root);
+    assert.equal(core.modules.disabled.size, 5);
+    assert.deepEqual(names(core.modules.loaded), ['goodver']);
+});

@@ -69,7 +69,7 @@ function createCore({ logger = console.log } = {}) {
             let mod, id = path.relative(root, dir) || 'modules';
             try {
                 mod = require(path.resolve(dir, 'index.js'));
-                if (!mod || !validName(mod.name) || typeof mod.version !== 'string') throw new Error();
+                if (!mod || !validName(mod.name) || typeof mod.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(mod.version)) throw new Error();
                 id = mod.name;
                 if (candidates.has(id) || disabled.has(id) || loaded.has(id)) { disable(id, 'Duplicate module name'); return; }
                 if (!compatible(mod.engine)) { disable(id, 'Incompatible engine'); return; }
