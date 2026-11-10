@@ -128,7 +128,8 @@ Telegram allows user applications to connect securely via their official MTProto
    {
      "telegramApiId": 12345678,
      "telegramApiHash": "0123456789abcdef0123456789abcdef",
-     "panelHost": "127.0.0.1"
+     "panelHost": "127.0.0.1",
+     "panelPort": 3005
    }
    ```
 8. Save the file (`Ctrl+S`).
@@ -187,9 +188,9 @@ Launch via `gui\start_gui.bat` or by clicking `lpbot.exe`.
 
 ---
 
-### 5.2. Web Control Panel (Port 3001)
+### 5.2. Web Control Panel (Port 3005)
 The web interface launches automatically whenever the bot runs. Open any browser and navigate to:
-👉 **[http://127.0.0.1:3001](http://127.0.0.1:3001)**
+👉 **[http://127.0.0.1:3005](http://127.0.0.1:3005)**
 
 #### Panel Sections:
 | Section | Description |
@@ -205,14 +206,14 @@ The web interface launches automatically whenever the bot runs. Open any browser
 | 💾 **Export (`/export`)** | Download clean JSON backups of your triggers, templates, and flags |
 
 > [!WARNING]
-> By design, the web panel does not require a password to ensure frictionless local usage and binds strictly to `127.0.0.1`. **Do not change `panelHost` to `0.0.0.0`** and never forward port 3001 to the public internet!
+> By design, the web panel does not require a password to ensure frictionless local usage and binds strictly to `127.0.0.1`. **Do not change `panelHost` to `0.0.0.0`** and never forward port 3005 to the public internet!
 
 ---
 
 ### 5.3. Setting the Command Prefix (Smart Quote Normalization)
 The command prefix is the symbol preceding any bot command (e.g., `*ping` or `.help`).
 
-1. Open the web panel at **[Settings](http://127.0.0.1:3001/settings)** (or open the "Settings" tab in the GUI).
+1. Open the web panel at **[Settings](http://127.0.0.1:3005/settings)** (or open the "Settings" tab in the GUI).
 2. In the **"Command Prefix"** field, type 1 to 3 special symbols (defaults are `*` or `‘`).
 3. **Smart Quote Auto-Replacement**:
    Mobile keyboards on iOS and Android frequently replace plain single apostrophes (`'`) with curved typographic quotes (`’` or `‘`).

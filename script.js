@@ -1126,7 +1126,7 @@ startKeepAlive() {
 async startWebInterface() {
     try {
         if (!this.webInterface) {
-            const port = Number(process.env.PANEL_PORT) || (typeof appConfig !== 'undefined' && appConfig.panelPort) || 3001;
+            const port = Number(process.env.PANEL_PORT) || (typeof appConfig !== 'undefined' && appConfig.panelPort) || 3005;
             this.webInterface = new WebInterface(this, null, port, this.panelHost);
         }
         await this.webInterface.start();

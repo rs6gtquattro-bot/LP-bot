@@ -18,7 +18,7 @@ class WebInterface {
 
     // host: адрес, на котором слушает панель. По умолчанию только локальная петля 127.0.0.1,
     // наружу панель открывается только явно через panelHost в config.json.
-    constructor(bot, db, port = 3001, host = '127.0.0.1', token = null) {
+    constructor(bot, db, port = 3005, host = '127.0.0.1', token = null) {
         this.version = '1.1.0';
         this.bot = bot;
         this.db = db || (bot && bot.db);

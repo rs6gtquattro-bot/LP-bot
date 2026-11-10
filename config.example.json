@@ -2,6 +2,7 @@
   "telegramApiId": 0,
   "telegramApiHash": "",
   "panelHost": "127.0.0.1",
+  "panelPort": 3005,
   "panelToken": "",
   "vk": {
     "userToken": "",

@@ -2,8 +2,32 @@ const { app, BrowserWindow, Menu, Tray, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-// Адрес веб-панели бота (web_interface.js слушает 3001)
-const PANEL_URL = 'http://127.0.0.1:3001';
+// Адрес веб-панели бота (web_interface.js слушает 3005)
+function getPanelUrl() {
+    if (process.env.PANEL_URL) return process.env.PANEL_URL;
+    let port = 3005;
+    let host = '127.0.0.1';
+    if (process.env.PANEL_PORT) {
+        const p = parseInt(process.env.PANEL_PORT, 10);
+        if (p > 0) port = p;
+    }
+    const configPath = path.join(__dirname, '..', 'config.json');
+    if (fs.existsSync(configPath)) {
+        try {
+            const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            if (cfg) {
+                if (cfg.panelPort && !process.env.PANEL_PORT) {
+                    const p = parseInt(cfg.panelPort, 10);
+                    if (p > 0) port = p;
+                }
+                if (cfg.panelHost) host = cfg.panelHost;
+            }
+        } catch (e) {}
+    }
+    return `http://${host}:${port}`;
+}
+
+const PANEL_URL = getPanelUrl();
 const { spawn } = require('child_process');
 
 class TelegramBotGUI {
