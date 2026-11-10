@@ -69,6 +69,9 @@ class lpbot {
         this.commands = {};
         this.webInterface = null;
         this.botInfo = null;
+        this.blacklistChats = new Set();
+        this.whitelistChats = new Set();
+        this.trustedUsers = new Map();
         
         this.settings = {
             prefix: '!',
@@ -879,6 +882,17 @@ async saveTimersToDatabase() {
                 enabled BOOLEAN DEFAULT true,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 settings TEXT
+            )`,
+
+            // таб. acl (контроль доступа и фильтрация чатов)
+            `CREATE TABLE IF NOT EXISTS acl (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                target_type TEXT NOT NULL CHECK(target_type IN ('chat', 'user')),
+                target_id TEXT NOT NULL,
+                rule_type TEXT NOT NULL CHECK(rule_type IN ('blacklist', 'whitelist', 'trusted')),
+                access_level INTEGER DEFAULT 1 CHECK(access_level BETWEEN 1 AND 3),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(target_type, target_id, rule_type)
             )`
         ];
 
@@ -1185,6 +1199,9 @@ async startWebInterface() {
     try {
         await this.loadTimersFromDatabase();
     } catch (timerError) {}
+    try {
+        await this.loadAclFromDatabase();
+    } catch (aclError) {}
 
     // Добавляем глобальный обработчик необработанных исключений
     process.on('unhandledRejection', (reason, promise) => {
@@ -1308,19 +1325,121 @@ async startWebInterface() {
     });
 }
 
+    normalizeTgId(tgId) {
+        if (!tgId && tgId !== 0) return null;
+        const clean = (typeof tgId === 'object' && tgId !== null)
+            ? (tgId.userId || tgId.id || tgId.value || tgId)
+            : tgId;
+        const normalized = typeof clean === 'bigint' ? clean.toString() : String(clean).trim();
+        if (normalized === '[object Object]' || normalized === 'NaN' || normalized === 'undefined' || normalized === '') {
+            return null;
+        }
+        return normalized;
+    }
+
+    isChatBlocked(chatId) {
+        const id = this.normalizeTgId(chatId);
+        if (!id) return false;
+        if (this.blacklistChats && this.blacklistChats.has(id)) return true;
+        if (this.whitelistChats && this.whitelistChats.size > 0 && !this.whitelistChats.has(id)) return true;
+        return false;
+    }
+
+    async getUserAccessLevel(senderId) {
+        if (this.isOwnerMessage(null, senderId)) return 4;
+        const id = this.normalizeTgId(senderId);
+        if (!id) return 0;
+        if (this.trustedUsers && this.trustedUsers.has(id)) return this.trustedUsers.get(id);
+
+        if (this.db) {
+            try {
+                const aclRow = await new Promise(res => {
+                    this.db.get("SELECT access_level FROM acl WHERE target_type = 'user' AND target_id = ? AND rule_type = 'trusted'", [id], (e, r) => res(r));
+                });
+                if (aclRow && aclRow.access_level) {
+                    const lvl = Number(aclRow.access_level);
+                    if (this.trustedUsers) this.trustedUsers.set(id, lvl);
+                    return lvl;
+                }
+            } catch {}
+        }
+        const user = await this.getUserData(id);
+        if (user && user.access_level > 0) {
+            const lvl = Number(user.access_level);
+            if (this.trustedUsers) this.trustedUsers.set(id, lvl);
+            return lvl;
+        }
+        return 0;
+    }
+
+    getCommandMinLevel(commandName) {
+        const cmd = String(commandName || '').toLowerCase().trim();
+        const LEVEL_1_COMMANDS = new Set([
+            'тест', 'пинг', 'test',
+            'о_чате', 'инфо', 'чат', 'chat_info',
+            'айди', 'id', 'user_id',
+            'рег', 'reg_date',
+            'проверить', 'check_url',
+            'qr', 'чек_qr', 'check_qr',
+            'перевод', 'translate',
+            'прокси', 'proxy',
+            'шаб', 'шаблон', 'шаблоны', 'templates',
+            'команды', 'хелп', 'help', 'кмд', 'commands',
+            'поиск', 'search',
+            'премиум', 'premium',
+            'таймеры', 'timers',
+            'триггеры', 'triggers'
+        ]);
+        const LEVEL_2_COMMANDS = new Set([
+            'смс', 'удалить', 'delete_messages',
+            'закреп', 'пин', 'pin'
+        ]);
+
+        if (LEVEL_1_COMMANDS.has(cmd)) return 1;
+        if (LEVEL_2_COMMANDS.has(cmd)) return 2;
+        return 4; // Owner only
+    }
+
+    async loadAclFromDatabase() {
+        if (!this.db) return;
+        return new Promise((resolve) => {
+            this.db.all('SELECT * FROM acl', [], (err, rows) => {
+                if (err) {
+                    resolve();
+                    return;
+                }
+                this.blacklistChats.clear();
+                this.whitelistChats.clear();
+                this.trustedUsers.clear();
+                for (const r of rows || []) {
+                    const tid = this.normalizeTgId(r.target_id);
+                    if (!tid) continue;
+                    if (r.target_type === 'chat') {
+                        if (r.rule_type === 'blacklist') this.blacklistChats.add(tid);
+                        else if (r.rule_type === 'whitelist') this.whitelistChats.add(tid);
+                    } else if (r.target_type === 'user') {
+                        if (r.rule_type === 'trusted') this.trustedUsers.set(tid, Number(r.access_level) || 1);
+                    }
+                }
+                resolve();
+            });
+        });
+    }
+
     isOwnerMessage(message, senderId) {
+        if (message && message.out) return true;
         if (!this.botInfo) return false;
-        const ownId = (this.botInfo.id && this.botInfo.id.value) 
-            ? Number(this.botInfo.id.value) 
-            : Number(this.botInfo.id);
-        const senderIdNum = (senderId && senderId.value) 
-            ? Number(senderId.value) 
-            : Number(senderId);
-        return Boolean((message && message.out) || (ownId && senderIdNum === ownId));
+        const sid = (senderId !== undefined && senderId !== null)
+            ? ((typeof senderId === 'object' && senderId !== null) ? (senderId.userId || senderId.id || senderId.value || senderId) : senderId)
+            : (message && (message.senderId || message.fromId));
+        if (!sid) return false;
+        const ownIdClean = (this.botInfo.id && this.botInfo.id.value) ? this.botInfo.id.value : this.botInfo.id;
+        const ownIdStr = typeof ownIdClean === 'bigint' ? ownIdClean.toString() : String(ownIdClean);
+        const sidStr = typeof sid === 'bigint' ? sid.toString() : String(sid);
+        return ownIdStr === sidStr;
     }
 
     setupMessageHandlers() {
-    // Обработчик для команд и триггеров
     // Обработчик для команд и триггеров
     this.telegramClient.addEventHandler(async (event) => {
         try {
@@ -1332,12 +1451,17 @@ async startWebInterface() {
             const senderId = message.senderId;
             const messageId = message.id;
 
+            // 1. Гвард фильтрации чатов: жесткое заглушение в ЧС или вне БС
+            if (this.isChatBlocked(chatId)) {
+                return;
+            }
+
             // Получаем информацию о боте
             if (!this.botInfo) {
                 this.botInfo = await this.telegramClient.getMe();
             }
 
-            // Уровень 1 гварда безопасности: команды доступны ТОЛЬКО владельцу аккаунта
+            // Уровень 1 гварда безопасности: проверка прав отправителя
             const isOwner = this.isOwnerMessage(message, senderId);
 
             // Обработка команд (если сообщение начинается с префикса)
@@ -1348,16 +1472,25 @@ async startWebInterface() {
                 prefixLen = 1;
             }
             if (prefixLen > 0) {
-                if (!isOwner) {
-                    console.warn(`⛔ [SECURITY] Отклонена попытка вызова команды от не-владельца (senderId: ${senderId})`);
+                const parts = text.slice(prefixLen).trim().split(/\s+/);
+                const command = parts[0].toLowerCase();
+                const args = parts.slice(1);
+
+                // Определение прав пользователя (Silent Drop для посторонних без прав)
+                const userLevel = isOwner ? 4 : await this.getUserAccessLevel(senderId);
+                const minLevel = this.getCommandMinLevel(command);
+
+                if (userLevel === 0) {
+                    console.warn(`⛔ [SECURITY] Silent Drop: отклонен вызов команды ${command} от неавторизованного пользователя (senderId: ${senderId})`);
                     return;
                 }
 
-                const parts = text.split(' ');
-                const command = parts[0].toLowerCase().substring(prefixLen);
-                const args = parts.slice(1);
-                
-                console.log(`🔧 Вызов команды: ${command}, args: ${args}`);
+                if (userLevel < minLevel) {
+                    console.warn(`⛔ [SECURITY] Silent Drop: недостаточно прав для команды ${command} (уровень пользователя: ${userLevel}, требуется: ${minLevel})`);
+                    return;
+                }
+
+                console.log(`🔧 Вызов команды: ${command}, args: ${args} (уровень доступа: ${userLevel})`);
                 await this.handleCommand(command, args, message, chatId, senderId, messageId);
                 return;
             }
@@ -1519,6 +1652,16 @@ async startWebInterface() {
             'дип_статус': this.deepseekStatusSimple.bind(this),
             'дип_помощь': this.deepseekHelpSimple.bind(this)
             };
+
+        // Регистрация команд расширенной системы доступа (ACL & Chat Filtering)
+        Object.assign(this.commands, {
+            'чс_чат': this.manageChatBlacklist.bind(this),
+            'бс_чат': this.manageChatWhitelist.bind(this),
+            'доверить': this.trustUserCommand.bind(this),
+            'отозвать': this.revokeUserCommand.bind(this),
+            'доступ': this.checkUserAccessCommand.bind(this),
+            'список_доступа': this.listAclCommand.bind(this)
+        });
     }
 
     async manageTemplates(args, message, chatId, senderId, messageId) {
@@ -2288,17 +2431,12 @@ async startWebInterface() {
             return;
         }
 
-        // Уровень 2 гварда безопасности: диспетчер команд выполняет команды только владельца
-        if (!this.isOwnerMessage(message, senderIdValue)) {
-            console.error(`⛔ [SECURITY] handleCommand: отказ в доступе для senderId ${senderIdValue}`);
+        // Уровень 2 гварда безопасности: проверка заглушения чата
+        if (this.isChatBlocked(chatIdValue)) {
+            console.warn(`🔇 [SECURITY] handleCommand: чат ${chatIdValue} заглушен, команда ${command} отклонена`);
             return;
         }
-        
-        const user = await this.getUserData(senderIdValue);
-        if (!user) {
-            await this.ensureUserExists(senderIdValue, null, null, null);
-        }
-        
+
         // Паритет команд: алиасы-синонимы TG
         const TG_ALIASES = {
             'кмд': 'команды',
@@ -2312,6 +2450,22 @@ async startWebInterface() {
             'пин': 'закреп',
             'ш': 'шаб'
         };
+
+        // Уровень 2 гварда безопасности: проверка прав на уровне диспетчера команд
+        const isOwner = this.isOwnerMessage(message, senderIdValue);
+        const userLevel = isOwner ? 4 : await this.getUserAccessLevel(senderIdValue);
+        const resolvedCmdName = this.commands[command] ? command : (TG_ALIASES[command] || command);
+        const minLevel = this.getCommandMinLevel(resolvedCmdName);
+
+        if (userLevel < minLevel) {
+            console.error(`⛔ [SECURITY] handleCommand: отказ в доступе к ${command} для senderId ${senderIdValue} (уровень: ${userLevel}, требуется: ${minLevel})`);
+            return;
+        }
+        
+        const user = await this.getUserData(senderIdValue);
+        if (!user) {
+            await this.ensureUserExists(senderIdValue, null, null, null);
+        }
         let handler = this.commands[command] || (TG_ALIASES[command] && this.commands[TG_ALIASES[command]]);
         const resolvedCommand = handler ? (this.commands[command] ? command : TG_ALIASES[command]) : (TG_ALIASES[command] || command);
 
@@ -2406,6 +2560,278 @@ async startWebInterface() {
         if (this.vkClient) this.vkClient.setPrefix(newPrefix); // VK-команды на том же префиксе
         
         await this.editMessage(chatId, messageId, `✅ Префикс изменен на: ${newPrefix}`);
+    }
+
+    async manageChatBlacklist(args, message, chatId, senderId, messageId) {
+        if (!this.isOwnerMessage(message, senderId)) return;
+        const action = args && args[0] ? args[0].toLowerCase() : 'список';
+        const targetChatId = args && args[1] ? args[1] : chatId;
+        const cleanId = this.normalizeTgId(targetChatId);
+
+        try {
+            switch (action) {
+                case 'добавить':
+                case '+': {
+                    if (!cleanId) {
+                        await this.editMessage(chatId, messageId, '❌ Некорректный ID чата');
+                        return;
+                    }
+                    this.blacklistChats.add(cleanId);
+                    if (this.db) {
+                        this.db.run(
+                            "INSERT INTO acl (target_type, target_id, rule_type, access_level) VALUES ('chat', ?, 'blacklist', 1) ON CONFLICT(target_type, target_id, rule_type) DO NOTHING",
+                            [cleanId]
+                        );
+                    }
+                    await this.editMessage(chatId, messageId, `🔇 Чат ${cleanId} добавлен в черный список.\nКоманды и триггеры в нем заглушены.`);
+                    break;
+                }
+                case 'удалить':
+                case '-':
+                case 'del': {
+                    if (!cleanId) {
+                        await this.editMessage(chatId, messageId, '❌ Некорректный ID чата');
+                        return;
+                    }
+                    const existed = this.blacklistChats.delete(cleanId);
+                    if (this.db) {
+                        this.db.run("DELETE FROM acl WHERE target_type = 'chat' AND target_id = ? AND rule_type = 'blacklist'", [cleanId]);
+                    }
+                    if (existed) {
+                        await this.editMessage(chatId, messageId, `🔊 Чат ${cleanId} удален из черного списка.`);
+                    } else {
+                        await this.editMessage(chatId, messageId, `⚠️ Чат ${cleanId} не найден в черном списке.`);
+                    }
+                    break;
+                }
+                case 'очистить':
+                case 'clear': {
+                    this.blacklistChats.clear();
+                    if (this.db) {
+                        this.db.run("DELETE FROM acl WHERE target_type = 'chat' AND rule_type = 'blacklist'");
+                    }
+                    await this.editMessage(chatId, messageId, '🧹 Черный список чатов очищен.');
+                    break;
+                }
+                case 'список':
+                case 'list':
+                default: {
+                    const list = Array.from(this.blacklistChats);
+                    if (list.length === 0) {
+                        await this.editMessage(chatId, messageId, `📋 Черный список чатов пуст.\nДобавить: ${this.settings.prefix}чс_чат добавить [id]`);
+                    } else {
+                        const lines = list.map((id, idx) => `${idx + 1}. \`${id}\``).join('\n');
+                        await this.editMessage(chatId, messageId, `🔇 Заглушенные чаты (${list.length}):\n\n${lines}\n\nУдалить: ${this.settings.prefix}чс_чат удалить [id]`);
+                    }
+                    break;
+                }
+            }
+        } catch (e) {
+            await this.editMessage(chatId, messageId, `❌ Ошибка управления ЧС чатов: ${e.message}`);
+        }
+    }
+
+    async manageChatWhitelist(args, message, chatId, senderId, messageId) {
+        if (!this.isOwnerMessage(message, senderId)) return;
+        const action = args && args[0] ? args[0].toLowerCase() : 'список';
+        const targetChatId = args && args[1] ? args[1] : chatId;
+        const cleanId = this.normalizeTgId(targetChatId);
+
+        try {
+            switch (action) {
+                case 'добавить':
+                case '+': {
+                    if (!cleanId) {
+                        await this.editMessage(chatId, messageId, '❌ Некорректный ID чата');
+                        return;
+                    }
+                    this.whitelistChats.add(cleanId);
+                    if (this.db) {
+                        this.db.run(
+                            "INSERT INTO acl (target_type, target_id, rule_type, access_level) VALUES ('chat', ?, 'whitelist', 1) ON CONFLICT(target_type, target_id, rule_type) DO NOTHING",
+                            [cleanId]
+                        );
+                    }
+                    await this.editMessage(chatId, messageId, `⚪ Чат ${cleanId} добавлен в белый список.\nРежим Strict Whitelist активен.`);
+                    break;
+                }
+                case 'удалить':
+                case '-':
+                case 'del': {
+                    if (!cleanId) {
+                        await this.editMessage(chatId, messageId, '❌ Некорректный ID чата');
+                        return;
+                    }
+                    const existed = this.whitelistChats.delete(cleanId);
+                    if (this.db) {
+                        this.db.run("DELETE FROM acl WHERE target_type = 'chat' AND target_id = ? AND rule_type = 'whitelist'", [cleanId]);
+                    }
+                    if (existed) {
+                        await this.editMessage(chatId, messageId, `⚪ Чат ${cleanId} удален из белого списка.`);
+                    } else {
+                        await this.editMessage(chatId, messageId, `⚠️ Чат ${cleanId} не найден в белом списке.`);
+                    }
+                    break;
+                }
+                case 'очистить':
+                case 'clear': {
+                    this.whitelistChats.clear();
+                    if (this.db) {
+                        this.db.run("DELETE FROM acl WHERE target_type = 'chat' AND rule_type = 'whitelist'");
+                    }
+                    await this.editMessage(chatId, messageId, '🧹 Белый список чатов очищен (фильтрация по белому списку отключена).');
+                    break;
+                }
+                case 'список':
+                case 'list':
+                default: {
+                    const list = Array.from(this.whitelistChats);
+                    if (list.length === 0) {
+                        await this.editMessage(chatId, messageId, `📋 Белый список чатов пуст (бот отвечает везде, кроме ЧС).\nАктивировать: ${this.settings.prefix}бс_чат добавить [id]`);
+                    } else {
+                        const lines = list.map((id, idx) => `${idx + 1}. \`${id}\``).join('\n');
+                        await this.editMessage(chatId, messageId, `⚪ Разрешенные чаты (Strict Whitelist, ${list.length}):\n\n${lines}\n\nУдалить: ${this.settings.prefix}бс_чат удалить [id]`);
+                    }
+                    break;
+                }
+            }
+        } catch (e) {
+            await this.editMessage(chatId, messageId, `❌ Ошибка управления БС чатов: ${e.message}`);
+        }
+    }
+
+    async resolveTargetUser(args, message, chatId) {
+        let targetId = null;
+        let targetName = null;
+        let remainingArgs = args ? [...args] : [];
+
+        if (message && message.replyTo && message.replyTo.replyToMsgId) {
+            try {
+                if (this.telegramClient && typeof this.telegramClient.getMessages === 'function') {
+                    const msgs = await this.telegramClient.getMessages(chatId, { ids: [message.replyTo.replyToMsgId] });
+                    if (msgs && msgs[0] && msgs[0].senderId) {
+                        targetId = msgs[0].senderId;
+                        targetName = msgs[0].sender ? (msgs[0].sender.firstName || msgs[0].sender.username) : String(targetId);
+                    }
+                }
+            } catch {}
+        }
+
+        if (!targetId && remainingArgs.length > 0) {
+            const firstArg = remainingArgs[0];
+            const cleanArg = String(firstArg).replace(/^@/, '');
+            if (/^-?\d+$/.test(cleanArg)) {
+                targetId = cleanArg;
+                targetName = cleanArg;
+                remainingArgs = remainingArgs.slice(1);
+            } else {
+                try {
+                    if (this.telegramClient && typeof this.telegramClient.getEntity === 'function') {
+                        const entity = await this.telegramClient.getEntity(cleanArg);
+                        if (entity && entity.id) {
+                            targetId = entity.id;
+                            targetName = entity.firstName || entity.username || cleanArg;
+                            remainingArgs = remainingArgs.slice(1);
+                        }
+                    }
+                } catch {}
+                if (!targetId) {
+                    targetId = cleanArg;
+                    targetName = cleanArg;
+                    remainingArgs = remainingArgs.slice(1);
+                }
+            }
+        }
+        return { targetId: this.normalizeTgId(targetId), targetName, remainingArgs };
+    }
+
+    async trustUserCommand(args, message, chatId, senderId, messageId) {
+        if (!this.isOwnerMessage(message, senderId)) return;
+        const { targetId, targetName, remainingArgs } = await this.resolveTargetUser(args, message, chatId);
+
+        if (!targetId) {
+            await this.editMessage(chatId, messageId, '💡 Использование: доверить @пользователь [уровень 1..2] (или ответом на сообщение)');
+            return;
+        }
+
+        const level = remainingArgs.length > 0 ? (parseInt(remainingArgs[0], 10) || 1) : 1;
+        if (level < 1 || level > 2) {
+            await this.editMessage(chatId, messageId, '❌ Допустимые уровни делегирования: 1 (Доверенный) или 2 (Модератор). Уровень 4 закреплен за владельцем.');
+            return;
+        }
+
+        this.trustedUsers.set(targetId, level);
+        if (this.db) {
+            this.db.run(
+                "INSERT INTO acl (target_type, target_id, rule_type, access_level) VALUES ('user', ?, 'trusted', ?) ON CONFLICT(target_type, target_id, rule_type) DO UPDATE SET access_level = excluded.access_level",
+                [targetId, level]
+            );
+            this.db.run("UPDATE users SET access_level = ? WHERE tg_id = ?", [level, targetId]);
+        }
+        const levelNames = { 1: '1 (Доверенный: утилиты, инфо)', 2: '2 (Модератор: смс, закреп)' };
+        await this.editMessage(chatId, messageId, `✅ Пользователю ${targetName || targetId} успешно выдан уровень доступа: ${levelNames[level] || level}`);
+    }
+
+    async revokeUserCommand(args, message, chatId, senderId, messageId) {
+        if (!this.isOwnerMessage(message, senderId)) return;
+        const { targetId, targetName } = await this.resolveTargetUser(args, message, chatId);
+
+        if (!targetId) {
+            await this.editMessage(chatId, messageId, '💡 Использование: отозвать @пользователь (или ответом на сообщение)');
+            return;
+        }
+
+        this.trustedUsers.delete(targetId);
+        if (this.db) {
+            this.db.run("DELETE FROM acl WHERE target_type = 'user' AND target_id = ? AND rule_type = 'trusted'", [targetId]);
+            this.db.run("UPDATE users SET access_level = 0 WHERE tg_id = ?", [targetId]);
+        }
+        await this.editMessage(chatId, messageId, `✅ Права пользователя ${targetName || targetId} полностью отозваны (уровень 0: Guest).`);
+    }
+
+    async checkUserAccessCommand(args, message, chatId, senderId, messageId) {
+        let checkId = senderId;
+        let checkName = 'Вы';
+
+        if ((args && args.length > 0) || (message && message.replyTo)) {
+            const resolved = await this.resolveTargetUser(args, message, chatId);
+            if (resolved.targetId) {
+                checkId = resolved.targetId;
+                checkName = resolved.targetName || checkId;
+            }
+        }
+
+        const level = await this.getUserAccessLevel(checkId);
+        const ROLE_NAMES = {
+            0: '0: Guest (Обычный пользователь, команды игнорируются)',
+            1: '1: Trusted (Доверенный: инфо, утилиты, чтение)',
+            2: '2: Moderator (Модератор: удаление смс, закреп)',
+            3: '3: Admin (Администратор бота)',
+            4: '4: Owner (Владелец бота, абсолютный суверенитет)'
+        };
+
+        const roleText = ROLE_NAMES[level] || `Неизвестный уровень (${level})`;
+        await this.editMessage(chatId, messageId, `🔐 Уровень доступа для ${checkName} (\`${checkId}\`):\n${roleText}`);
+    }
+
+    async listAclCommand(args, message, chatId, senderId, messageId) {
+        if (!this.isOwnerMessage(message, senderId)) return;
+        const list = [];
+        for (const [id, lvl] of this.trustedUsers.entries()) {
+            list.push({ id, level: lvl });
+        }
+
+        if (list.length === 0) {
+            await this.editMessage(chatId, messageId, '📋 Список доверенных пользователей пуст.\nДобавить: `доверить @user [1|2]`');
+            return;
+        }
+
+        const lines = list.map((u, idx) => {
+            const role = u.level === 2 ? 'Модератор' : (u.level === 1 ? 'Доверенный' : `Уровень ${u.level}`);
+            return `${idx + 1}. ID: \`${u.id}\` — ${role} (lvl ${u.level})`;
+        });
+
+        await this.editMessage(chatId, messageId, `👥 Доверенные пользователи бота (${list.length}):\n\n${lines.join('\n')}`);
     }
 
     async showCommands(args, message, chatId, senderId, messageId) {

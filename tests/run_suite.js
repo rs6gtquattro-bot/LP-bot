@@ -22,7 +22,8 @@ const TESTS = [
     { name: 'registry', file: 'registry.test.js', desc: 'Слепок реестра команд TG (40) и VK (47)' },
     { name: 'panel_host', file: 'panel_host.test.js', desc: 'Привязка веб-панели к 127.0.0.1 (Express + WS)' },
     { name: 'dist_security', file: 'dist_security.test.js', desc: 'Фильтры сборщика .exe и защита релизных артефактов от утечки секретов' },
-    { name: 'new_tz_features', file: 'new_tz_features.test.js', desc: 'Требования нового ТЗ (edit vs reply, строгий префикс, ACL, смс)' }
+    { name: 'new_tz_features', file: 'new_tz_features.test.js', desc: 'Требования нового ТЗ (edit vs reply, строгий префикс, ACL, смс)' },
+    { name: 'acl_security', file: 'acl_security.test.js', desc: 'Защита ACL, Silent Drop, BigInt ID, фильтрация чатов (P0)' }
 ];
 
 console.log('===============================================================');
