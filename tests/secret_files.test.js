@@ -56,8 +56,8 @@ t(!isSecretPath('backups/script.js_1700000000000.backup'), 'бэкап script.js
 // 5. script.js и vk_client.js используют общий модуль
 const root = path.join(__dirname, '..');
 const src = fs.readFileSync(path.join(root, 'script.js'), 'utf8');
-t(/validateFilePath\(userPath\) \{[\s\S]{0,200}return resolveBotPath\(__dirname, userPath\);/.test(src), 'script.js: validateFilePath вызывает resolveBotPath');
-t(/resolveRestore\(__dirname, backupName\)/.test(src), 'script.js: restoreBackup вызывает resolveRestore');
+t(/validateFilePath\(userPath\) \{[\s\S]{0,200}return resolveBotPath\((__dirname|DATA_DIR), userPath\);/.test(src), 'script.js: validateFilePath вызывает resolveBotPath');
+t(/resolveRestore\((__dirname|DATA_DIR), backupName\)/.test(src), 'script.js: restoreBackup вызывает resolveRestore');
 const methods = ['showCodeFile', 'editCodeFile', 'addCodeToFile', 'createCodeFile', 'deleteCodeFile', 'showFileInfo', 'createBackup'];
 for (const m of methods) {
     const body = (src.match(new RegExp(`async ${m}\\(args[\\s\\S]*?\\n\\}`)) || [''])[0];

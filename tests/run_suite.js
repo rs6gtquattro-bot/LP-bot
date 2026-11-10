@@ -15,10 +15,13 @@ const TESTS = [
     { name: 'vk_prefix_html', file: 'vk_prefix_html.test.js', desc: 'Семейство апострофов, HTML-декодер, ReDoS защита' },
     { name: 'security_audit', file: 'security_audit.test.js', desc: 'Security-аудит (ADS, Path Traversal, prototype)' },
     { name: 'core', file: 'core.test.js', desc: 'Модульное ядро main.js (26 тестов, изоляция, emit)' },
+    { name: 'core_services', file: 'core_services.test.js', desc: 'Службы ядра Этапа 2 (db, settings, session, telegram, messaging, process, users, utils)' },
+    { name: 'db_module', file: 'db_module.test.js', desc: 'Модуль службы базы данных modules/core/db (WAL, busy_timeout=5000)' },
     { name: 'security_auth', file: 'security_auth.test.js', desc: 'Авторизация владельца isOwnerMessage, RCE блок, удаление бомбы/пуша' },
     { name: 'security_panel', file: 'security_panel.test.js', desc: 'Защита веб-панели: Bearer-токен, CSRF Origin, CSWSH' },
     { name: 'registry', file: 'registry.test.js', desc: 'Слепок реестра команд TG (40) и VK (47)' },
-    { name: 'panel_host', file: 'panel_host.test.js', desc: 'Привязка веб-панели к 127.0.0.1 (Express + WS)' }
+    { name: 'panel_host', file: 'panel_host.test.js', desc: 'Привязка веб-панели к 127.0.0.1 (Express + WS)' },
+    { name: 'dist_security', file: 'dist_security.test.js', desc: 'Фильтры сборщика .exe и защита релизных артефактов от утечки секретов' }
 ];
 
 console.log('===============================================================');

@@ -17,7 +17,7 @@ const nm = process.env.NODE_PATH || path.join(root, 'node_modules');
 
 const FAKE_ID = '98765432';
 const FAKE_HASH = 'deadbeef00000000000000000000c0de';
-const env = { ...process.env, TELEGRAM_API_ID: FAKE_ID, TELEGRAM_API_HASH: FAKE_HASH, NODE_PATH: nm };
+const env = { ...process.env, TELEGRAM_API_ID: FAKE_ID, TELEGRAM_API_HASH: FAKE_HASH, NODE_PATH: nm, LP_DATA_DIR: tmp };
 delete env.VK_USER_TOKEN;
 
 const timeout = Number(process.env.TEST_TIMEOUT) || 35000;

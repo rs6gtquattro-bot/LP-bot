@@ -28,11 +28,11 @@ function calculateSha256(filePath) {
 }
 
 const entries = fs.readdirSync(distDir, { withFileTypes: true });
-const targetExtensions = ['.exe', '.zip', '.tar.gz', '.blockmap', '.yml', '.yaml'];
+const targetExtensions = ['.exe', '.zip', '.tar.gz'];
 
 const releaseFiles = entries
     .filter(e => e.isFile() && targetExtensions.some(ext => e.name.toLowerCase().endsWith(ext)))
-    .filter(e => !e.name.toLowerCase().includes('sha256'))
+    .filter(e => !e.name.toLowerCase().includes('sha256') && !e.name.toLowerCase().includes('debug'))
     .map(e => e.name)
     .sort();
 

@@ -25,6 +25,7 @@ bot_database.sqlite*
 
 # --- Бэкапы и дампы (включая автобэкапы secret_files.js) ---
 backups/
+tests/.stage2_backup/
 *.backup
 *.bak
 *.old
@@ -62,6 +63,7 @@ LP-bot-*.tar.gz*
 MANIFEST.sha256
 
 # --- Системный мусор и IDE ---
+scratch/
 .idea/
 .vscode/
 *.swp

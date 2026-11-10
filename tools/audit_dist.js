@@ -120,7 +120,8 @@ if (asarFiles.length === 0) {
 
             let leakedInAsar = [];
             for (const f of filesInAsar) {
-                if (isSecretPath(f) || /session\.txt|config\.json|settings\.json|\.sqlite|\.env/i.test(f)) {
+                const baseName = path.basename(f);
+                if (isSecretPath(f) || /(^|[\\/])(session\.txt|config\.json|congif\.json|settings\.json)$/i.test(baseName) || /\.(sqlite|sqlite-wal|sqlite-shm|sqlite\.bak|db)$/i.test(baseName) || /^\.env/i.test(baseName)) {
                     leakedInAsar.push(f);
                 }
             }
@@ -150,7 +151,8 @@ if (fs.existsSync(unpackedDir)) {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
             const full = path.join(dir, entry.name);
             const rel = path.relative(unpackedDir, full);
-            if (isSecretPath(rel) || /session\.txt|config\.json|settings\.json|\.sqlite|\.env/i.test(entry.name)) {
+            const baseName = entry.name;
+            if (isSecretPath(rel) || /(^|[\\/])(session\.txt|config\.json|congif\.json|settings\.json)$/i.test(baseName) || /\.(sqlite|sqlite-wal|sqlite-shm|sqlite\.bak|db)$/i.test(baseName) || /^\.env/i.test(baseName)) {
                 leakedInUnpacked.push(rel);
             }
             if (entry.isDirectory()) {
