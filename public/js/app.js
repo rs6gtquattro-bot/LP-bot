@@ -82,7 +82,7 @@ class BotDashboard {
 
         // 3. Данные на главной странице
         const botVersion = document.getElementById('botVersion');
-        if (botVersion) botVersion.textContent = status.version || '1.0.0';
+        if (botVersion) botVersion.textContent = status.version || '1.1.0';
         const botStatus = document.getElementById('botStatus');
         if (botStatus) botStatus.textContent = isRunning ? 'Активен' : 'Остановлен';
         const uptime = document.getElementById('uptime');

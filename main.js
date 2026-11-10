@@ -1,6 +1,7 @@
 // Engine only on import; the legacy bot starts only through start()/node main.js.
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { version } = require('./package.json');
 
 function createCore({ logger = console.log } = {}) {
@@ -135,7 +136,40 @@ function createCore({ logger = console.log } = {}) {
     return core;
 }
 
+async function checkVersionIntegrity() {
+    let policy = null;
+    try {
+        const local = path.join(__dirname, 'version.json');
+        if (fs.existsSync(local)) policy = JSON.parse(fs.readFileSync(local, 'utf8'));
+    } catch {}
+    const hasNet = () => {
+        try {
+            return Object.values(os.networkInterfaces()).some(a => (a || []).some(i => !i.internal));
+        } catch { return false; }
+    };
+    if (hasNet() && !process.env.NO_NETWORK_CHECK && !process.env.HEADLESS_TEST) {
+        try {
+            const axios = require('axios');
+            const res = await axios.get('https://raw.githubusercontent.com/rs6gtquattro-bot/LP-bot/main/version.json', { timeout: 5000 });
+            if (res && res.data && typeof res.data === 'object') policy = res.data;
+        } catch {}
+    }
+    if (!policy) return true;
+    const revoked = Array.isArray(policy.revokedVersions) ? policy.revokedVersions : [];
+    const minVer = policy.minSupportedVersion || '1.0.0';
+    const cmp = (a, b) => {
+        const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+        return (pa[0] || 0) - (pb[0] || 0) || (pa[1] || 0) - (pb[1] || 0) || (pa[2] || 0) - (pb[2] || 0);
+    };
+    if (revoked.includes(version) || cmp(version, minVer) < 0) {
+        console.error(`⛔ [KILL-SWITCH] Запуск заблокирован: ${policy.message || 'Версия отозвана.'}`);
+        process.exit(1);
+    }
+    return true;
+}
+
 async function start({ modulesDir, logger, legacy = () => require('./script.js') } = {}) {
+    await checkVersionIntegrity();
     const core = createCore({ logger });
     await core.loadModules(modulesDir);
     await core.emit('ready'); // Engine ready, not Telegram authorization.
@@ -143,7 +177,7 @@ async function start({ modulesDir, logger, legacy = () => require('./script.js')
     return core;
 }
 
-module.exports = { createCore, start };
+module.exports = { createCore, start, checkVersionIntegrity };
 if (require.main === module) {
     if (process.versions && process.versions.electron && !process.env.ELECTRON_RUN_AS_NODE) {
         require('./gui/gui.js');

@@ -4,7 +4,7 @@
 const path = require('path');
 
 const SECRET_NAMES = new Set(['session.txt', 'config.json', 'congif.json', 'settings.json', '.env']);
-const SECRET_DIRS = new Set(['.git']); // .git/config, хуки — тоже закрыто
+const SECRET_DIRS = new Set(['.git', 'docs', 'тз']); // .git/config, docs, ТЗ — тоже закрыто
 // /~\d/ — короткие имена Windows 8.3 (SESSIO~1.TXT, config~1.json): по ним можно открыть секрет в обход списка
 const SECRET_RE = [/\.session$/, /^\.env\./, /\.sqlite$/, /\.sqlite-(journal|wal|shm)$/, /~\d/];
 
@@ -16,7 +16,15 @@ function isSecretName(name) {
 
 // true, если хоть одна часть пути — секретный файл или папка
 function isSecretPath(p) {
-    return String(p).split(/[\\/]+/).filter(Boolean).some(isSecretName);
+    const parts = String(p).split(/[\\/]+/).filter(Boolean);
+    // Документация сторонних пакетов внутри node_modules не является приватной документацией проекта
+    if (parts.includes('node_modules')) {
+        return parts.some(part => {
+            const n = String(part).toLowerCase().replace(/_\d+\.backup$/, '');
+            return SECRET_NAMES.has(n) || SECRET_RE.some(re => re.test(n));
+        });
+    }
+    return parts.some(isSecretName);
 }
 
 // Проверка пути из команды бота. baseDir — папка бота. Возвращает полный путь или бросает ошибку.

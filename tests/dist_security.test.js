@@ -26,6 +26,8 @@ t(hasExclusion('.sqlite'), 'build.files исключает базы данных
 t(hasExclusion('.env'), 'build.files исключает файлы окружения .env');
 t(hasExclusion('backups'), 'build.files исключает папку бэкапов backups');
 t(hasExclusion('tests'), 'build.files исключает тесты');
+t(hasExclusion('docs'), 'build.files исключает приватную документацию docs');
+t(hasExclusion('ТЗ'), 'build.files исключает внутренние файлы ТЗ');
 
 // 2. Проверка конфигурации pkg (если используется)
 if (pkg.pkg) {
@@ -40,13 +42,38 @@ const distDir = path.join(root, 'dist');
 if (fs.existsSync(distDir)) {
     const distEntries = fs.readdirSync(distDir);
     const exeFiles = distEntries.filter(f => f.endsWith('.exe'));
-    const zipFiles = distEntries.filter(f => f.endsWith('.zip'));
+    const zipFiles = distEntries.filter(f => f.endsWith('.zip') && f.includes(pkg.version));
 
     if (exeFiles.length > 0) {
         t(true, `Обнаружен бинарник .exe в dist: ${exeFiles[0]}`);
     }
     if (zipFiles.length > 0) {
-        t(true, `Обнаружен portable archive .zip в dist: ${zipFiles[0]}`);
+        t(true, `Обнаружен актуальный portable archive .zip в dist: ${zipFiles[0]}`);
+        for (const zip of zipFiles) {
+            const zipBuf = fs.readFileSync(path.join(distDir, zip));
+            const hasDocs = zipBuf.includes(Buffer.from('docs/')) || zipBuf.includes(Buffer.from('docs\\'));
+            const hasTz = zipBuf.includes(Buffer.from('ТЗ/')) || zipBuf.includes(Buffer.from('ТЗ\\'));
+            t(!hasDocs, `${zip} гарантированно не содержит приватную папку docs`);
+            t(!hasTz, `${zip} гарантированно не содержит внутреннюю папку ТЗ`);
+        }
+    }
+
+    const asarPath = path.join(distDir, 'win-unpacked', 'resources', 'app.asar');
+    if (fs.existsSync(asarPath)) {
+        const asarBuf = fs.readFileSync(asarPath);
+        let asarDocs = false;
+        let asarTz = false;
+        try {
+            const size = asarBuf.readUInt32LE(12);
+            const header = JSON.parse(asarBuf.slice(16, 16 + size).toString('utf8'));
+            asarDocs = Boolean(header.files && header.files.docs);
+            asarTz = Boolean(header.files && header.files['ТЗ']);
+        } catch {
+            asarDocs = asarBuf.includes(Buffer.from('PROJECT.md'));
+            asarTz = asarBuf.includes(Buffer.from('ТЗ.sha256'));
+        }
+        t(!asarDocs, 'app.asar гарантированно не содержит приватную папку docs');
+        t(!asarTz, 'app.asar гарантированно не содержит внутреннюю папку ТЗ');
     }
 
     const shaFile = path.join(distDir, 'SHA256SUMS.txt');

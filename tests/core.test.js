@@ -17,9 +17,8 @@ function fixture(root, dir, name, extra = '') {
 const names = map => [...map.keys()];
 
 test('import is inert; version comes from package.json', () => {
-    assert.equal(quiet().version, '1.0.0');
-    assert.match(quiet().version, /^\d+\.\d+\.\d+$/);
     assert.equal(quiet().version, require('../package.json').version);
+    assert.match(quiet().version, /^\d+\.\d+\.\d+$/);
     assert.equal(require.cache[require.resolve('../script.js')], undefined);
 });
 test('provide/get including undefined; unknown and duplicate services throw', () => {
@@ -108,10 +107,11 @@ test('recursive loader orders requires before consumers; real handlers and alias
 });
 test('bad engines disabled; exact and caret stable engine 1.0.0 accepted', async () => {
     const root = temp(), core = quiet();
-    for (const [i, engine] of ['^0.9.0', '^2.0.0', '^1.1.0', '*', '^1.0.0-beta', '1.0.1', null].entries()) {
+    const ver = core.version;
+    for (const [i, engine] of ['^0.9.0', '^2.0.0', '^1.2.0', '*', '^1.0.0-beta', '1.0.1', null].entries()) {
         fixture(root, 'bad' + i, 'bad' + i, `engine: ${JSON.stringify(engine)}, init() { throw new Error('must not run'); }`);
     }
-    fixture(root, 'exact', 'exact', `engine: '1.0.0'`);
+    fixture(root, 'exact', 'exact', `engine: '${ver}'`);
     fixture(root, 'caret', 'caret');
     await core.loadModules(root);
     assert.equal(core.modules.disabled.size, 7);
@@ -189,7 +189,7 @@ test('module duplicate command/alias rejected with rollback, original survives',
     assert.equal(core.commands.get('pong').handler(), 'original');
     assert(!core.commands.has('temporary'));
     assert(!core.commands.has('name'));
-    assert.match(core.commands.get('движок').handler(core, {}), /1\.0\.0/);
+    assert.match(core.commands.get('движок').handler(core, {}), new RegExp(quiet().version.replace(/\./g, '\\.')));
 });
 test('malformed command, invalid lifecycle and failed cleanup do not stop neighbors', async () => {
     const root = temp(), core = quiet();
@@ -231,7 +231,7 @@ test('engine command returns actual lists, version and prefix-neutral instructio
     fixture(root, 'bad', 'bad', `engine: '^3.0.0'`);
     await core.loadModules(root);
     const text = await core.commands.get('движок').handler(core, {});
-    for (const expected of ['1.0.0', 'Загружены: live', 'Отключены: bad', 'modules/', 'экспортируй объект', 'перезапусти бота', 'docs/modules.md']) {
+    for (const expected of [quiet().version, 'Загружены: live', 'Отключены: bad', 'modules/', 'экспортируй объект', 'перезапусти бота', 'docs/modules.md']) {
         assert(text.includes(expected));
     }
     assert(!/[‘’']движок/.test(text));

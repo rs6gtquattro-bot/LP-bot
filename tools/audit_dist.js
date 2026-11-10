@@ -120,8 +120,16 @@ if (asarFiles.length === 0) {
 
             let leakedInAsar = [];
             for (const f of filesInAsar) {
+                if (f.startsWith('node_modules/')) continue;
                 const baseName = path.basename(f);
-                if (isSecretPath(f) || /(^|[\\/])(session\.txt|config\.json|congif\.json|settings\.json)$/i.test(baseName) || /\.(sqlite|sqlite-wal|sqlite-shm|sqlite\.bak|db)$/i.test(baseName) || /^\.env/i.test(baseName)) {
+                if (
+                    isSecretPath(f) ||
+                    /^docs(?:\/|$)/i.test(f) ||
+                    /^ТЗ(?:\/|$)/i.test(f) ||
+                    /(^|[\\/])(session\.txt|config\.json|congif\.json|settings\.json)$/i.test(baseName) ||
+                    /\.(sqlite|sqlite-wal|sqlite-shm|sqlite\.bak|db)$/i.test(baseName) ||
+                    /^\.env/i.test(baseName)
+                ) {
                     leakedInAsar.push(f);
                 }
             }
@@ -150,9 +158,17 @@ if (fs.existsSync(unpackedDir)) {
     function scanUnpacked(dir) {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
             const full = path.join(dir, entry.name);
-            const rel = path.relative(unpackedDir, full);
+            const rel = path.relative(unpackedDir, full).replace(/\\/g, '/');
+            if (rel.includes('node_modules/')) continue;
             const baseName = entry.name;
-            if (isSecretPath(rel) || /(^|[\\/])(session\.txt|config\.json|congif\.json|settings\.json)$/i.test(baseName) || /\.(sqlite|sqlite-wal|sqlite-shm|sqlite\.bak|db)$/i.test(baseName) || /^\.env/i.test(baseName)) {
+            if (
+                isSecretPath(rel) ||
+                /^docs(?:\/|$)/i.test(rel) ||
+                /^ТЗ(?:\/|$)/i.test(rel) ||
+                /(^|[\\/])(session\.txt|config\.json|congif\.json|settings\.json)$/i.test(baseName) ||
+                /\.(sqlite|sqlite-wal|sqlite-shm|sqlite\.bak|db)$/i.test(baseName) ||
+                /^\.env/i.test(baseName)
+            ) {
                 leakedInUnpacked.push(rel);
             }
             if (entry.isDirectory()) {

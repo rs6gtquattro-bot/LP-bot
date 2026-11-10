@@ -2323,7 +2323,7 @@ async startWebInterface() {
     async showCommands(args, message, chatId, senderId, messageId) {
     const custom = this.settings.customValues;
     const realCreator = "@chovamnadoa";
-    const realVersion = "3.0.0";
+    const realVersion = "1.1.0";
     const categories = {
         '🔔 УВЕДОМЛЕНИЯ И СТАТУСЫ': [
             {command: 'уведы', description: 'Включить/выключить уведомления'},
@@ -5918,7 +5918,7 @@ async testCommand(args, message, chatId, senderId, messageId) {
     
     const realUptime = `${Math.floor((new Date() - this.startTime) / 1000)} сек.`;
     const realCreator = "@chovamnadoa";
-    const realVersion = "14.87.0";
+    const realVersion = "1.1.0";
     const realBotName = this.botInfo?.firstName || "Бот";
     
     const testText = `✅ ${custom.botName || realBotName} работает!\n\n` +
