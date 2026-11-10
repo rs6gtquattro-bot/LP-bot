@@ -892,7 +892,7 @@ async saveTimersToDatabase() {
         // ОПТИМИЗИРОВАННАЯ конфигурация клиента
         this.telegramClient = new TelegramClient(stringSession, this.telegramApiId, this.telegramApiHash, {
             connectionRetries: 10,
-            useWSS: false,
+            useWSS: true, // TCP на порт 443: порт 80 до Telegram с компьютера запуска не проходит
             autoReconnect: true,
             timeout: 30000,
             requestRetries: 8,
@@ -7375,8 +7375,8 @@ const telegramApiId = process.env.TELEGRAM_API_ID || appConfig.telegramApiId;
 const telegramApiHash = process.env.TELEGRAM_API_HASH || appConfig.telegramApiHash || '';
 
 console.log('🔧 Запуск с параметрами:');
-console.log(`- API ID: ${telegramApiId}`);
-console.log(`- API Hash: ${telegramApiHash ? '***' + telegramApiHash.slice(-4) : 'НЕ УСТАНОВЛЕН'}`);
+console.log(`- API ID: ${telegramApiId ? 'задан' : 'НЕ УСТАНОВЛЕН'}`); // значение не печатаем: лог не должен содержать ключи
+console.log(`- API Hash: ${telegramApiHash ? 'задан' : 'НЕ УСТАНОВЛЕН'}`);
 
 const bot = new lpbot(telegramApiId, telegramApiHash);
 // Адрес веб-панели: panelHost из config.json, по умолчанию 127.0.0.1 (только этот компьютер).
