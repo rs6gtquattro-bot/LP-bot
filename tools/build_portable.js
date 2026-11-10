@@ -51,8 +51,8 @@ for (const file of filesToCopy) {
     }
 }
 
-// 2. Копирование директорий
-const dirsToCopy = ['gui', 'views', 'public', 'modules', 'docs', 'assets'];
+// 2. Копирование директорий (docs и ТЗ строго исключены из дистрибутива)
+const dirsToCopy = ['gui', 'views', 'public', 'modules', 'assets'];
 for (const dir of dirsToCopy) {
     const src = path.join(rootDir, dir);
     if (fs.existsSync(src)) {
@@ -60,6 +60,7 @@ for (const dir of dirsToCopy) {
             recursive: true,
             filter: (srcPath) => {
                 const rel = path.relative(rootDir, srcPath);
+                if (/^(?:docs|ТЗ)(?:[/\\]|$)/i.test(rel)) return false;
                 return !isSecretPath(rel) && !rel.includes('.git');
             }
         });
