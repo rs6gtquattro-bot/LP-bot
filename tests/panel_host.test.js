@@ -59,10 +59,11 @@ const tryConnect = (host, port) => new Promise((resolve) => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'script.js'), 'utf8');
     t(
         src.includes('new WebInterface(this, null, port, this.panelHost)') ||
-        src.includes('new WebInterface(this, null, 3001, this.panelHost)'),
+        src.includes('new WebInterface(this, null, 3005, this.panelHost)'),
         'script.js: панель создаётся с this.panelHost'
     );
     t(src.includes("bot.panelHost = appConfig.panelHost || '127.0.0.1';"), "script.js: panelHost берётся из config.json, по умолчанию '127.0.0.1'");
+    t(new WebInterface(bot, null).port === 3005, 'WebInterface: порт по умолчанию равен 3005');
 
     console.log(fail ? `ИТОГ: провалов ${fail}` : 'ИТОГ: все тесты пройдены');
     process.exit(fail ? 1 : 0);

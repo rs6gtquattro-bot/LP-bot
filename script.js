@@ -71,7 +71,7 @@ class lpbot {
         this.botInfo = null;
         
         this.settings = {
-            prefix: '‘',
+            prefix: '!',
             notifications: true,
             autoStatus: false,
             autoStatusSettings: { mode: 1, interval: 60 },
@@ -101,7 +101,7 @@ class lpbot {
         }
         };
         
-        this.setupDatabase();
+        this.dbReady = this.setupDatabase();
         this.setupCommands();
         this.setupProcessHandlers();
         this.loadSettings();
@@ -702,7 +702,7 @@ async saveTimersToDatabase() {
             const settingsData = JSON.parse(data);
             
             // Загружаем основные настройки
-            this.settings.prefix = settingsData.prefix || '!';
+            this.settings.prefix = (settingsData.prefix && settingsData.prefix !== '‘') ? settingsData.prefix : '!';
             if (this.vkClient) this.vkClient.setPrefix(this.settings.prefix);
             this.settings.notifications = settingsData.notifications !== undefined ? settingsData.notifications : true;
             this.settings.autoStatus = settingsData.autoStatus || false;
