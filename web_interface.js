@@ -168,7 +168,10 @@ class WebInterface {
                 triggerUses: triggers.reduce((sum, t) => sum + uses(t), 0),
                 popularTrigger: popular && uses(popular) > 0 ? { word: popular.word, used: uses(popular) } : null,
                 todayErrors: this.logs.filter(l => l.level === 'error' && new Date(l.time) >= today).length,
-                nodeVersion: process.version
+                nodeVersion: process.version,
+                // VK long poll: только счётчики, без текста сообщений
+                vkEvents: this.bot.vkClient ? this.bot.vkClient.status.events : null,
+                vkConnected: this.bot.vkClient ? this.bot.vkClient.status.connected : null
             });
         });
 

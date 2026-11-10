@@ -75,7 +75,7 @@ class VkClient {
         this.captchaStreak = 0;
         this.pollErrorStreak = 0;
         this.http = null;
-        this.status = { connected: false, ts: null, lastEventAt: null, errors: 0, captchas: 0 }; // для *вк_лп_статус
+        this.status = { connected: false, ts: null, lastEventAt: null, errors: 0, captchas: 0, events: 0 }; // для *вк_лп_статус
     }
 
     // ---------- запуск ----------
@@ -222,6 +222,9 @@ class VkClient {
                     const msg = this.normalize(u);
                     if (msg) {
                         this.status.lastEventAt = this.deps.now();
+                        this.status.events++;
+                        // только счётчик, без текста и отправителя
+                        if (this.status.events === 1 || this.status.events % 100 === 0) this.deps.log(`📥 VK LP: событий ${this.status.events}`);
                         await this.handleMessage(msg).catch((e) => { this.status.errors++; this.deps.log('❌ VK: ошибка обработки:', e.message); });
                     }
                 }
@@ -247,6 +250,19 @@ class VkClient {
         const msg = { platform: 'vk', messageId, peerId, fromId, out, text: String(text || '') };
         if (extra.source_act) msg.action = extra.source_act; // служебное событие беседы, например chat_screenshot
         return msg;
+    }
+
+    // ---------- префикс ----------
+    // Префикс VK-команд общий с TG: берётся из settings.prefix бота (settings.json).
+    // ДОПУЩЕНИЕ: если settings.prefix пуст, остаётся vk.prefix из config.json, иначе «*» из DEFAULTS.
+    static configFor(bot, config = {}) {
+        const p = bot && bot.settings && bot.settings.prefix;
+        return typeof p === 'string' && p ? { ...config, prefix: p } : { ...config };
+    }
+
+    // Вызывается при смене префикса в TG (команда префикс) и при перечитывании settings.json
+    setPrefix(p) {
+        if (typeof p === 'string' && p) this.config.prefix = p;
     }
 
     // ---------- команды (ТЗ п. 5) ----------
